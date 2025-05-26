@@ -9,6 +9,7 @@
 <body>
     <div class="navbar">
         <div class="navbar-left">
+            <img src="{{ url_for('static', filename='img/restro.png') }}" alt="Restro Logo" class="logo">
             <a href="/home" class="{% if active_page == 'home' %}active{% endif %}">Home</a>
             <a href="/patients" class="{% if active_page == 'patients' %}active{% endif %}">Pasien</a>
         </div>

@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
+import json # Import modul json
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here' # Ganti dengan kunci rahasia yang kuat!
@@ -17,11 +18,11 @@ patients_data = [
 # Dummy data for movements
 # Setiap gerakan punya ID, nama, deskripsi (opsional), dan path gambar
 movements_list = [
-    {"id": "G001", "name": "Mengangkat Bahu", "image": "gerakan_bahu_1.jpg", "description": "Latihan untuk mobilitas sendi bahu, dilakukan 10x repetisi per sisi."},
-    {"id": "G002", "name": "Mengangkat Kedua Lengan", "image": "gerakan_lengan_2.jpg", "description": "Latihan peregangan untuk lengan atas, fokus pada rentang gerak penuh."},
-    {"id": "G003", "name": "Menekuk Kaki", "image": "gerakan_kaki_3.jpg", "description": "Latihan penguatan otot paha dan betis, lakukan perlahan dan terkontrol."},
-    {"id": "G004", "name": "Posisi Tengkurap", "image": "gerakan_tengkurap_4.jpg", "description": "Latihan stabilisasi tubuh bagian inti, tahan posisi selama 30 detik."},
-    {"id": "G005", "name": "Posisi Terlentang", "image": "gerakan_terlentang_5.jpg", "description": "Latihan relaksasi dan peregangan punggung, pastikan punggung rata dengan lantai."},
+    {"id": "G001", "name": "Menekuk Siku", "image": "menekuk_siku_1.gif", "description": "Latihan untuk mobilitas sendi siku"},
+    {"id": "G002", "name": "Mengangkat Pinggul", "image": "angkat_pinggul.gif", "description": "Latihan peregangan untuk lengan atas, fokus pada rentang gerak penuh."},
+    {"id": "G003", "name": "Menekuk Lutut", "image": "lutut_turun.gif", "description": "Latihan penguatan otot paha dan betis, lakukan perlahan dan terkontrol."},
+    {"id": "G004", "name": "Naikan Kepalan Ke Depan", "image": "kepalan_tangan.gif", "description": "Latihan stabilisasi tubuh bagian inti, tahan posisi selama 30 detik."},
+    {"id": "G005", "name": "Rentangkan Tangan", "image": "rentangkan.gif", "description": "Latihan relaksasi dan peregangan punggung, pastikan punggung rata dengan lantai."},
     # Tambahkan lebih banyak gerakan di sini sesuai kebutuhan
     # {"id": "G006", "name": "Jalan di Tempat", "image": "gerakan_jalan_6.jpg", "description": "Latihan kardio ringan, lakukan selama 5-10 menit."},
     # {"id": "G007", "name": "Latihan Keseimbangan", "image": "gerakan_keseimbangan_7.jpg", "description": "Melatih keseimbangan statis dan dinamis, bisa dengan pegangan jika diperlukan."}
@@ -83,22 +84,34 @@ def add_activity(patient_id):
         return redirect(url_for('patients'))
 
     # Inisialisasi atau ambil gerakan yang sudah dipilih dari session
-    # session['selected_movements_for_activity'] akan menyimpan list of movement IDs (e.g., ["G001", "G003"])
+    # session['selected_movements_for_activity'] akan menyimpan list of dicts: [{'id': 'G001', 'count': '10', 'unit': 'kali'}]
     # Pastikan ID pasien yang disimpan di session cocok, jika tidak, reset pilihan
     if 'selected_movements_for_activity' not in session or session.get('patient_id_for_activity') != patient_id:
         session['selected_movements_for_activity'] = []
         session['patient_id_for_activity'] = patient_id # Simpan ID pasien agar tidak tercampur
 
-    selected_movement_ids = session['selected_movements_for_activity']
+    selected_movements_with_reps = session['selected_movements_for_activity']
     
-    # Ambil detail gerakan berdasarkan ID yang dipilih
-    current_selected_movements = [m for m in movements_list if m['id'] in selected_movement_ids]
+    # Ambil detail gerakan (nama, deskripsi, gambar) untuk gerakan yang sudah dipilih
+    # Ini untuk ditampilkan di 'List Gerakan' pada halaman add_activity
+    current_selected_movements_details = []
+    for selected_item in selected_movements_with_reps:
+        movement_id = selected_item['id']
+        count = selected_item.get('count', '') # Ambil count, default kosong
+        unit = selected_item.get('unit', '')   # Ambil unit, default kosong
+        movement_detail = next((m for m in movements_list if m['id'] == movement_id), None)
+        if movement_detail:
+            current_selected_movements_details.append({
+                'id': movement_detail['id'],
+                'name': movement_detail['name'],
+                'count': count, # Sertakan informasi count
+                'unit': unit    # Sertakan informasi unit
+            })
 
     if request.method == 'POST':
         program_name = request.form['program_name']
         terapist_name = request.form['terapist_name']
         execution_date = request.form['execution_date'] # Tanggal pelaksanaan
-        repetitions = request.form['repetitions']
         
         # Di sini Anda akan menyimpan data kegiatan ke database Anda
         # Untuk contoh ini, kita hanya akan mencetak ke konsol dan flash pesan
@@ -106,8 +119,9 @@ def add_activity(patient_id):
         print(f"Nama Program: {program_name}")
         print(f"Nama Terapis: {terapist_name}")
         print(f"Tanggal Pelaksanaan: {execution_date}")
-        print(f"Jumlah Pengulangan: {repetitions}")
-        print(f"Gerakan yang dipilih: {[m['name'] for m in current_selected_movements]}")
+        print("Gerakan yang dipilih:")
+        for item in current_selected_movements_details:
+            print(f"- {item['name']} ({item['count']} {item['unit']})") # Cetak dengan count dan unit
         
         # Bersihkan session setelah berhasil menyimpan program
         session.pop('selected_movements_for_activity', None)
@@ -119,7 +133,7 @@ def add_activity(patient_id):
     return render_template(
         'add_activity.html',
         patient=patient,
-        selected_movements=current_selected_movements,
+        selected_movements=current_selected_movements_details, # Kirim detail gerakan dengan count & unit
         username=session.get('username'),
         active_page='patients'
     )
@@ -136,14 +150,18 @@ def select_movements(patient_id):
         flash("Pasien tidak ditemukan.", "error")
         return redirect(url_for('patients'))
 
-    # Ambil gerakan yang sudah dipilih dari session jika ada
-    selected_movement_ids = session.get('selected_movements_for_activity', [])
+    # Ambil gerakan yang sudah dipilih dari session jika ada (berupa list of dicts)
+    selected_movements_with_reps = session.get('selected_movements_for_activity', [])
     
+    # Konversi list of dictionaries ke string JSON untuk diteruskan ke JavaScript
+    selected_movements_json_str = json.dumps(selected_movements_with_reps)
+
     return render_template(
         'select_movements.html',
         patient=patient,
-        movements=movements_list, # Kirim semua daftar gerakan
-        selected_movement_ids=selected_movement_ids, # Kirim ID gerakan yang sudah dipilih
+        movements=movements_list, # Semua daftar gerakan
+        # Teruskan string JSON langsung ke template
+        selected_movements_json_str=selected_movements_json_str,
         username=session.get('username'),
         active_page='patients'
     )
@@ -153,14 +171,20 @@ def update_selected_movements(patient_id):
     if not session.get('logged_in'):
         return redirect(url_for('login'))
     
-    # Ambil gerakan yang dipilih dari form (checkboxes)
-    # getlist() digunakan untuk mengambil semua nilai dari input dengan nama yang sama (misalnya, beberapa checkbox)
-    selected_ids = request.form.getlist('selected_movements[]')
+    # Ambil data JSON dari hidden input
+    selected_movements_json = request.form.get('selected_movements_json')
     
-    # Simpan kembali ke session
-    session['selected_movements_for_activity'] = selected_ids
+    if selected_movements_json:
+        # Parse JSON string menjadi Python list of dictionaries
+        selected_data = json.loads(selected_movements_json)
+        # Simpan data yang sudah di-parse ke session
+        session['selected_movements_for_activity'] = selected_data
+        flash("Gerakan berhasil diperbarui.", "info")
+    else:
+        # Jika tidak ada data JSON (mungkin tidak ada gerakan yang dipilih)
+        session['selected_movements_for_activity'] = []
+        flash("Tidak ada gerakan yang dipilih atau diperbarui.", "info")
     
-    flash("Gerakan berhasil diperbarui.", "info")
     return redirect(url_for('add_activity', patient_id=patient_id)) # Kembali ke halaman tambah kegiatan
 
 # --- Route Logout ---

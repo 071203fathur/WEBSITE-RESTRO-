@@ -36,6 +36,14 @@ body {
 .navbar-left {
     display: flex;
     gap: 20px; /* Jarak antar item di sisi kiri */
+    align-items: center; /* Menyelaraskan item secara vertikal */
+}
+
+/* Menambahkan gaya untuk logo di navbar-left */
+.navbar-left .logo {
+    height: 40px; /* Mengatur tinggi logo */
+    width: auto; /* Mempertahankan rasio aspek */
+    margin-right: 10px; /* Memberi sedikit jarak dari teks atau link */
 }
 
 .navbar a {
@@ -60,13 +68,14 @@ body {
 }
 
 .user-greeting {
-    font-size: 1em;
+    font-size: 0.95em; /* Sedikit lebih kecil */
     color: #666;
+    margin-right: 5px; /* Sedikit jarak dari foto profil */
 }
 
 .profile-pic {
-    width: 40px;
-    height: 40px;
+    width: 36px; /* Ukuran logo/foto profil diperkecil */
+    height: 36px; /* Ukuran logo/foto profil diperkecil */
     border-radius: 50%;
     object-fit: cover;
     border: 2px solid #28a745; /* Changed to primary green border */
@@ -79,6 +88,7 @@ body {
     border-radius: 6px;
     text-decoration: none;
     font-weight: 500;
+    font-size: 0.9em; /* Sedikit lebih kecil */
 }
 
 .button.logout-button:hover {
@@ -252,18 +262,18 @@ body {
 
 /* Action Button (Review Pasien) */
 .action-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
+    display: block; /* Changed to block to allow margin auto for centering */
+    width: 80%; /* Reduced width to prevent it from being too long */
+    max-width: 300px; /* Max width for larger screens */
+    margin: 15px auto 20px auto; /* Centered horizontally */
     padding: 15px 25px;
     border: none;
     border-radius: 10px;
     font-size: 1.2em;
     font-weight: 600;
     cursor: pointer;
+    text-align: center; /* Center text inside the button */
     transition: background-color 0.3s ease, box-shadow 0.3s ease;
-    margin-bottom: 20px;
     text-decoration: none;
     color: white;
 }
@@ -423,6 +433,14 @@ body {
 }
 
 /* Patient Detail */
+.patient-detail {
+    background-color: #ffffff; /* White background for the main detail area */
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08); /* Soft shadow for the card effect */
+    padding: 25px; /* Add padding inside the card */
+    margin-bottom: 20px; /* Space below the card */
+}
+
 .patient-detail .patient-header {
     display: flex;
     align-items: center;
@@ -656,15 +674,16 @@ body {
     border-radius: 12px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
     overflow: hidden;
-    cursor: pointer;
     transition: transform 0.2s ease, box-shadow 0.2s ease, border 0.2s ease;
     display: flex;
-    flex-direction: column;
+    flex-direction: column; /* Stack items vertically */
     align-items: center;
     text-align: center;
-    padding-bottom: 10px;
+    padding-bottom: 10px; /* Space for name and new input */
     position: relative;
     border: 2px solid transparent; /* Default transparent border */
+    min-height: 200px; /* Reduced min-height further for better fit */
+    justify-content: space-between; /* Distribute space vertically */
 }
 
 .movement-card.selected {
@@ -692,15 +711,60 @@ body {
     padding: 0 10px;
 }
 
+/* .movement-description-short { /* Removed from HTML, so this style is no longer needed */
+/* font-size: 0.85em; */
+/* color: #777; */
+/* margin: 5px 10px 10px; */
+/* min-height: 30px; */
+/* overflow: hidden; */
+/* text-overflow: ellipsis; */
+/* white-space: nowrap; */
+/* } */
+
 .movement-checkbox {
     position: absolute;
     top: 10px;
     left: 10px;
-    z-index: 2;
+    z-index: 3; /* Pastikan checkbox di atas trigger detail */
     width: 20px;
     height: 20px;
     accent-color: #28a745; /* Primary green for checkbox itself */
 }
+
+/* Repetition Input Group (Inline) */
+.repetition-input-group {
+    display: flex; /* Initially hidden, shown with JS */
+    align-items: center;
+    justify-content: space-between; /* Distribute space between items */
+    gap: 5px; /* Reduced gap */
+    padding: 0 10px; /* Adjusted padding to match card's internal spacing */
+    margin-top: 10px;
+    width: 100%; /* Make it take full width of its parent (movement-card) */
+    box-sizing: border-box; /* Include padding in width calculation */
+    /* background-color: #f8f9fa; /* Latar belakang untuk input group */
+    /* border-radius: 8px; */
+    /* border: 1px solid #eee; */
+    flex-shrink: 0; /* Prevent shrinking when space is tight */
+}
+
+.repetition-input-group input[type="number"] {
+    width: 40px; /* Further reduced width for number input */
+    padding: 5px 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 0.9em;
+    text-align: center;
+}
+
+.repetition-input-group select {
+    flex-grow: 1; /* Ambil sisa ruang */
+    padding: 5px 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 0.9em;
+    background-color: #fff;
+}
+
 
 /* "Add New" Card */
 .add-new-card {
@@ -763,6 +827,12 @@ body {
     box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
 }
 
+.fixed-bottom-button:disabled { /* Style for disabled button */
+    background-color: #cccccc;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
 
 /* Search Bar */
 .search-bar {
@@ -794,25 +864,26 @@ body {
     font-size: 1.2em;
 }
 
-/* Movement Detail Overlay */
-.movement-detail-overlay {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background-color: rgba(0, 0, 0, 0.6);
-    color: white;
-    padding: 8px 0;
-    font-size: 0.85em;
-    text-align: center;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    border-radius: 0 0 12px 12px;
+/* Detail Button (NEW) */
+.detail-button {
+    width: calc(100% - 20px); /* Full width minus padding */
+    margin-top: 10px; /* Space from repetition input */
+    padding: 8px 15px;
+    background-color: #f1f1f1; /* Light background */
+    color: #28a745; /* Green text */
+    border: 1px solid #28a745; /* Green border */
+    border-radius: 8px;
+    font-size: 0.9em;
+    font-weight: 500;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    flex-shrink: 0; /* Prevent shrinking */
 }
 
-.movement-card:hover .movement-detail-overlay {
-    opacity: 1;
+.detail-button:hover {
+    background-color: #28a745; /* Green background on hover */
+    color: white; /* White text on hover */
 }
+
 
 /* Modal Styling */
 .modal {
@@ -825,6 +896,9 @@ body {
     height: 100%; /* Full height */
     overflow: auto; /* Enable scroll if needed */
     background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+    display: flex; /* Use flexbox to center content */
+    justify-content: center;
+    align-items: center;
 }
 
 .modal-content {

@@ -29,25 +29,13 @@
             <ul class="movement-list-display">
                 {% if selected_movements %}
                     {% for movement in selected_movements %}
-                        <li>{{ movement.name }}</li>
+                        <li>{{ movement.name }} {% if movement.count and movement.unit %}({{ movement.count }} {{ movement.unit }}){% endif %}</li>
                     {% endfor %}
                 {% else %}
                     <li>Belum ada gerakan yang dipilih.</li>
                 {% endif %}
             </ul>
             <a href="{{ url_for('select_movements', patient_id=patient.id) }}" class="button secondary add-movement-button">+ Pilih gerakan</a>
-        </div>
-
-        <div class="form-group">
-            <label for="repetitions">Pengulangan:</label>
-            <select id="repetitions" name="repetitions" required>
-                <option value="1">1 kali</option>
-                <option value="2">2 kali</option>
-                <option value="3" selected>3 kali</option>
-                <option value="4">4 kali</option>
-                <option value="5">5 kali</option>
-                <option value="sesuai_kebutuhan">Sesuai Kebutuhan</option>
-            </select>
         </div>
 
         <button type="submit" class="button primary submit-program-button">Simpan Program</button>

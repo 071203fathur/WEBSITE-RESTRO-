@@ -13,18 +13,40 @@
     </div>
 
     <form method="POST" action="{{ url_for('update_selected_movements', patient_id=patient.id) }}">
+        <input type="hidden" name="selected_movements_json" id="selectedMovementsJson">
+
         <div class="movement-grid">
             {% for movement in movements %}
-            <label class="movement-card {% if movement.id in selected_movement_ids %}selected{% endif %}">
-                <input type="checkbox" name="selected_movements[]" value="{{ movement.id }}" {% if movement.id in selected_movement_ids %}checked{% endif %} class="movement-checkbox">
+            <label class="movement-card" data-movement-id="{{ movement.id }}">
+                <input type="checkbox" name="selected_movements_checkbox" value="{{ movement.id }}" class="movement-checkbox">
+                
                 <img src="{{ url_for('static', filename='img/' + movement.image) }}" alt="{{ movement.name }}" class="movement-image">
+                
                 <span class="movement-name">{{ movement.name }}</span>
-                <div class="movement-detail-overlay"
+                
+                {# Menghapus deskripsi singkat dari sini #}
+                {# <p class="movement-description-short">{{ movement.description }}</p> #}
+
+                <div class="repetition-input-group" style="display: none;">
+                    <div style="text-align:center">
+                        
+                        <input type="number" class="repetition-count" min="1" placeholder="Jumlah">
+                        <select class="repetition-unit">
+                            <option value="kali">kali</option>
+                            <option value="set">set</option>
+                            <option value="menit">menit</option>
+                            <option value="detik">detik</option>
+                            <option value="sesuai kebutuhan">sesuai kebutuhan</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="button" class="button secondary detail-button"
                      data-name="{{ movement.name }}"
                      data-description="{{ movement.description }}"
                      data-image="{{ url_for('static', filename='img/' + movement.image) }}">
-                    <span class="detail-text">Lihat Detail</span>
-                </div>
+                    Lihat Detail
+                </button>
             </label>
             {% endfor %}
 
@@ -37,83 +59,223 @@
             </label>
         </div>
 
-        <button type="submit" class="button primary fixed-bottom-button">Simpan Gerakan</button>
+        <button type="submit" class="button primary fixed-bottom-button" id="saveMovementsButton" disabled>Simpan Gerakan</button>
     </form>
 
     <div id="movementDetailModal" class="modal">
         <div class="modal-content">
             <span class="close-button" onclick="closeModal()">&times;</span>
             <h2 id="modalMovementName"></h2>
-            <img id="modalMovementImage" src="" alt="" class="modal-image">
+            <img id="modalMovementImage" src="" alt="Video Gerakan" class="modal-image">
             <p id="modalMovementDescription"></p>
         </div>
     </div>
 
     <script>
+        // selectedMovementsData akan berisi objek seperti: { 'G001': { count: '10', unit: 'kali' }, ... }
+        let selectedMovementsData = {};
+        // Parse JSON string dari Flask yang berisi data gerakan yang sudah dipilih
+        // Menggunakan filter default untuk memastikan JSON.parse selalu menerima string JSON yang valid (misalnya '[]')
+        const initialSelectedMovements = JSON.parse(`{{ selected_movements_json_str | default("[]", true) | safe }}`);
+        initialSelectedMovements.forEach(item => {
+            selectedMovementsData[item.id] = {
+                count: item.count || '',
+                unit: item.unit || 'kali'
+            };
+        });
+
         // Fungsi untuk filtering gerakan berdasarkan input pencarian
         function filterMovements() {
             var input, filter, grid, cards, name, i;
             input = document.getElementById("searchMovement");
             filter = input.value.toUpperCase();
             grid = document.querySelector(".movement-grid");
-            cards = grid.querySelectorAll(".movement-card:not(.add-new-card)"); // Kecualikan kartu "Tambah gerakan"
+            cards = grid.querySelectorAll(".movement-card:not(.add-new-card)");
 
             for (i = 0; i < cards.length; i++) {
                 name = cards[i].querySelector(".movement-name");
                 if (name.textContent.toUpperCase().indexOf(filter) > -1) {
-                    cards[i].style.display = ""; // Tampilkan
+                    cards[i].style.display = "";
                 } else {
-                    cards[i].style.display = "none"; // Sembunyikan
+                    cards[i].style.display = "none";
                 }
             }
         }
 
-        // Fungsi untuk menampilkan modal detail gerakan
-        // Data diambil dari dataset elemen yang diklik
-        function showMovementDetail(event) {
-            event.preventDefault(); // Mencegah checkbox terklik saat klik detail
-            event.stopPropagation(); // Mencegah label kartu terklik juga
+        // Fungsi untuk memvalidasi form (enable/disable tombol Simpan Gerakan)
+        function validateForm() {
+            const saveButton = document.getElementById('saveMovementsButton');
+            const checkedCheckboxes = document.querySelectorAll('.movement-checkbox:checked');
+            let allRepsFilled = true;
+
+            if (checkedCheckboxes.length === 0) {
+                allRepsFilled = false; // Jika tidak ada yang dicentang, tombol dinonaktifkan
+            } else {
+                checkedCheckboxes.forEach(checkbox => {
+                    const movementId = checkbox.value;
+                    // Periksa apakah gerakan ada di selectedMovementsData dan apakah count-nya tidak kosong
+                    // Juga pastikan count adalah angka valid jika satuan bukan 'sesuai kebutuhan'
+                    const count = selectedMovementsData[movementId] ? selectedMovementsData[movementId].count : '';
+                    const unit = selectedMovementsData[movementId] ? selectedMovementsData[movementId].unit : '';
+
+                    if (unit !== 'sesuai kebutuhan' && (count === '' || isNaN(parseInt(count)))) {
+                        allRepsFilled = false;
+                    }
+                });
+            }
             
-            const overlayElement = event.currentTarget;
-            const name = overlayElement.dataset.name;
-            const description = overlayElement.dataset.description;
-            const imageSrc = overlayElement.dataset.image;
+            saveButton.disabled = !allRepsFilled;
+            console.log('Form validation result:', allRepsFilled ? 'Valid' : 'Invalid'); // DEBUG LOG
+        }
+
+        // Fungsi untuk menampilkan modal detail gerakan
+        function showMovementDetailModal(event) {
+            event.preventDefault(); // Mencegah default action jika ini adalah tombol
+            event.stopPropagation(); // Mencegah event bubble
+
+            const triggerElement = event.currentTarget; // Elemen yang diklik (tombol "Lihat Detail")
+            const name = triggerElement.dataset.name;
+            const description = triggerElement.dataset.description;
+            const imageSrc = triggerElement.dataset.image; // Ini akan menjadi GIF
 
             document.getElementById("modalMovementName").textContent = name;
             document.getElementById("modalMovementDescription").textContent = description;
             document.getElementById("modalMovementImage").src = imageSrc;
-            document.getElementById("movementDetailModal").style.display = "flex"; // Gunakan flex untuk centering
+            
+            const modal = document.getElementById("movementDetailModal");
+            modal.style.display = "flex";
+            modal.style.justifyContent = "center";
+            modal.style.alignItems = "center";
+            console.log('Modal detail shown for:', name); // DEBUG LOG
         }
 
         // Fungsi untuk menutup modal
         function closeModal() {
             document.getElementById("movementDetailModal").style.display = "none";
+            console.log('Modal detail closed.'); // DEBUG LOG
         }
 
         // Tutup modal jika user klik di luar area modal content
         window.onclick = function(event) {
             var modal = document.getElementById("movementDetailModal");
             if (event.target == modal) {
-                modal.style.display = "none";
+                closeModal();
             }
         }
 
-        // Menambahkan/menghapus kelas 'selected' saat checkbox di-klik
+        // Event listener untuk perubahan checkbox (memilih/membatalkan gerakan)
         document.querySelectorAll('.movement-checkbox').forEach(checkbox => {
             checkbox.addEventListener('change', function() {
+                const movementCard = this.closest('.movement-card');
+                const movementId = movementCard.dataset.movementId;
+                const repetitionInputGroup = movementCard.querySelector('.repetition-input-group');
+                const repetitionCountInput = movementCard.querySelector('.repetition-count');
+                const repetitionUnitSelect = movementCard.querySelector('.repetition-unit');
+
                 if (this.checked) {
-                    this.closest('.movement-card').classList.add('selected');
+                    movementCard.classList.add('selected');
+                    repetitionInputGroup.style.display = 'flex'; // Tampilkan input repetisi
+                    console.log('Checkbox checked for', movementId, 'setting display to flex.'); // DEBUG LOG
+                    
+                    // Inisialisasi nilai input jika gerakan baru dipilih atau ada data sebelumnya
+                    if (!selectedMovementsData[movementId]) {
+                        selectedMovementsData[movementId] = { count: '', unit: 'kali' };
+                    }
+                    repetitionCountInput.value = selectedMovementsData[movementId].count;
+                    repetitionUnitSelect.value = selectedMovementsData[movementId].unit;
+
                 } else {
-                    this.closest('.movement-card').classList.remove('selected');
+                    movementCard.classList.remove('selected');
+                    repetitionInputGroup.style.display = 'none'; // Sembunyikan input repetisi
+                    console.log('Checkbox unchecked for', movementId, 'setting display to none.'); // DEBUG LOG
+                    delete selectedMovementsData[movementId]; // Hapus dari data yang dipilih
                 }
+                validateForm(); // Panggil validasi setiap kali checkbox berubah
             });
         });
 
-        // Menambahkan event listener ke overlay setelah DOM dimuat
-        document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('.movement-detail-overlay').forEach(overlay => {
-                overlay.addEventListener('click', showMovementDetail);
+        // Event listener untuk perubahan input jumlah repetisi
+        document.querySelectorAll('.repetition-count').forEach(input => {
+            input.addEventListener('input', function() {
+                const movementId = this.closest('.movement-card').dataset.movementId;
+                if (selectedMovementsData[movementId]) {
+                    selectedMovementsData[movementId].count = this.value;
+                }
+                console.log('Repetition count changed for', movementId, 'to:', this.value); // DEBUG LOG
+                validateForm(); // Panggil validasi setiap kali input berubah
             });
+        });
+
+        // Event listener untuk perubahan satuan repetisi
+        document.querySelectorAll('.repetition-unit').forEach(select => {
+            select.addEventListener('change', function() {
+                const movementId = this.closest('.movement-card').dataset.movementId;
+                if (selectedMovementsData[movementId]) {
+                    selectedMovementsData[movementId].unit = this.value;
+                }
+                console.log('Repetition unit changed for', movementId, 'to:', this.value); // DEBUG LOG
+                validateForm(); // Panggil validasi setiap kali satuan berubah
+            });
+        });
+
+        // Event listener untuk tombol "Simpan Gerakan" utama (mengisi hidden input)
+        document.getElementById('saveMovementsButton').addEventListener('click', function(event) {
+            // Pastikan form valid sebelum submit
+            if (this.disabled) {
+                event.preventDefault(); // Mencegah submit jika tombol dinonaktifkan
+                console.log('Attempted to save, but form is invalid.'); // DEBUG LOG
+                return;
+            }
+
+            const finalSelectedMovements = [];
+            document.querySelectorAll('.movement-checkbox:checked').forEach(checkbox => {
+                const movementId = checkbox.value;
+                const data = selectedMovementsData[movementId];
+                if (data) {
+                    finalSelectedMovements.push({
+                        id: movementId,
+                        count: data.count,
+                        unit: data.unit
+                    });
+                }
+            });
+
+            // Set nilai hidden input dengan JSON string dari finalSelectedMovements
+            document.getElementById('selectedMovementsJson').value = JSON.stringify(finalSelectedMovements);
+            console.log('Saving movements:', finalSelectedMovements); // DEBUG LOG
+        });
+
+        // Inisialisasi status saat DOM dimuat
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM Content Loaded. Initializing form state.'); // DEBUG LOG
+            // Inisialisasi status 'selected' dan tampilkan input repetisi
+            document.querySelectorAll('.movement-checkbox').forEach(checkbox => {
+                const movementId = checkbox.value;
+                if (selectedMovementsData[movementId]) { // Jika ada data repetisi untuk gerakan ini
+                    checkbox.checked = true;
+                    const movementCard = checkbox.closest('.movement-card');
+                    movementCard.classList.add('selected');
+                    const repetitionInputGroup = movementCard.querySelector('.repetition-input-group');
+                    const repetitionCountInput = movementCard.querySelector('.repetition-count');
+                    const repetitionUnitSelect = movementCard.querySelector('.repetition-unit');
+
+                    repetitionInputGroup.style.display = 'flex';
+                    repetitionCountInput.value = selectedMovementsData[movementId].count;
+                    repetitionUnitSelect.value = selectedMovementsData[movementId].unit;
+                    console.log('Initialized checkbox and input for:', movementId); // DEBUG LOG
+                }
+            });
+
+            // Tambahkan event listener untuk memicu modal detail pada tombol detail baru
+            document.querySelectorAll('.detail-button').forEach(button => {
+                button.addEventListener('click', showMovementDetailModal);
+            });
+
+            // Pastikan modal tersembunyi saat halaman dimuat
+            document.getElementById("movementDetailModal").style.display = "none";
+            console.log('Modal hidden on DOMContentLoaded.'); // DEBUG LOG
+
+            validateForm(); // Panggil validasi awal saat halaman dimuat
         });
     </script>
 {% endblock %}
