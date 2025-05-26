@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 import json
-from datetime import date # Import date untuk perbandingan tanggal
+from datetime import date, datetime # Import datetime untuk parsing tanggal
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here' # Ganti dengan kunci rahasia yang kuat!
@@ -27,8 +27,6 @@ movements_list = [
 ]
 
 # Dummy data for rehabilitation programs
-# Ini akan menyimpan program yang dibuat oleh terapis
-# Struktur: {'id': 'P001', 'terapist_name': 'terapis', 'patient_id': 1, 'program_name': 'Program Minggu 1', 'execution_date': 'YYYY-MM-DD', 'movements': [{'id': 'G001', 'count': '10', 'unit': 'kali'}]}
 rehab_programs = [
     {
         'id': 'PROG001',
@@ -143,6 +141,17 @@ def home():
     # Filter program berdasarkan terapis yang login
     therapist_programs = [p for p in rehab_programs if p['terapist_name'] == current_username]
 
+    # Urutkan program berdasarkan tanggal pelaksanaan terbaru (descending)
+    # Gunakan datetime.strptime untuk mengonversi string tanggal menjadi objek tanggal untuk perbandingan yang benar
+    sorted_therapist_programs = sorted(
+        therapist_programs,
+        key=lambda x: datetime.strptime(x['execution_date'], '%Y-%m-%d'),
+        reverse=True
+    )
+    
+    # Ambil hanya 2 program teratas
+    top_2_recent_programs = sorted_therapist_programs[:2]
+
     # Hitung metrik KPI baru
     today_date_str = date.today().isoformat() # Format YYYY-MM-DD
     
@@ -160,9 +169,9 @@ def home():
 
     total_patients_handled = len(patients_data) # Total pasien yang terdaftar di sistem
 
-    # Siapkan data program untuk ditampilkan di agenda/program list
+    # Siapkan data program untuk ditampilkan di agenda/program list (hanya top 2)
     programs_for_display = []
-    for program in therapist_programs:
+    for program in top_2_recent_programs: # Gunakan top_2_recent_programs
         patient = next((p for p in patients_data if p['id'] == program['patient_id']), None)
         patient_name = patient['nama'] if patient else 'Pasien Tidak Dikenal'
         
@@ -187,7 +196,6 @@ def home():
         })
     
     # Data dummy untuk grafik (contoh sederhana)
-    # Ini bisa diganti dengan data real dari database di masa depan
     chart_data_patients_per_month = {
         'labels': ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun'],
         'data': [5, 8, 12, 10, 15, 13] # Contoh jumlah pasien baru per bulan
@@ -201,8 +209,8 @@ def home():
         total_patients_handled=total_patients_handled,
         total_patients_rehab_today=total_patients_rehab_today,
         count_patients_completed_rehab=count_patients_completed_rehab,
-        therapist_programs=programs_for_display,
-        chart_data_patients_per_month=chart_data_patients_per_month, # Pass dict directly, no json.dumps
+        therapist_programs=programs_for_display, # Ini sekarang hanya berisi 2 program teratas
+        chart_data_patients_per_month=chart_data_patients_per_month,
         chart_data_overall_patients=chart_data_overall_patients
     )
 
@@ -257,16 +265,15 @@ def add_activity(patient_id):
         terapist_name = request.form['terapist_name']
         execution_date = request.form['execution_date']
         
-        # Simpan program baru ke daftar dummy rehab_programs
-        new_program_id = f"PROG{len(rehab_programs) + 1:03d}" # ID unik sederhana
+        new_program_id = f"PROG{len(rehab_programs) + 1:03d}"
         rehab_programs.append({
             'id': new_program_id,
             'terapist_name': terapist_name,
             'patient_id': patient_id,
             'program_name': program_name,
             'execution_date': execution_date,
-            'status': 'ongoing', # Default status
-            'movements': selected_movements_with_reps # Simpan gerakan dengan count dan unit
+            'status': 'ongoing',
+            'movements': selected_movements_with_reps
         })
 
         print(f"--- Program Rehabilitasi Baru untuk {patient['nama']} ---")

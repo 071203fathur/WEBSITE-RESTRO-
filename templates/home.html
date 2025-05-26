@@ -64,12 +64,8 @@
             </div>
         </div>
 
-        <button class="action-button primary-dark-button">
-            Review Pasien <span class="arrow-icon">▶</span>
-        </button>
-
         <div class="program-list-section card">
-            <h2>Daftar Program Kegiatan</h2>
+            <h2>2 Program Kegiatan Terbaru</h2>
             {% if therapist_programs %}
                 <div class="program-cards-container">
                     {% for program in therapist_programs %}
@@ -91,7 +87,7 @@
                     {% endfor %}
                 </div>
             {% else %}
-                <p>Belum ada program kegiatan yang dibuat.</p>
+                <p>Belum ada program kegiatan terbaru yang dibuat.</p>
             {% endif %}
         </div>
 
