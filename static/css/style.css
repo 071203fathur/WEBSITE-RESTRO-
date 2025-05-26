@@ -41,7 +41,7 @@ body {
 
 /* Menambahkan gaya untuk logo di navbar-left */
 .navbar-left .logo {
-    height: 40px; /* Mengatur tinggi logo */
+    height: 30px; /* Mengatur tinggi logo menjadi lebih kecil */
     width: auto; /* Mempertahankan rasio aspek */
     margin-right: 10px; /* Memberi sedikit jarak dari teks atau link */
 }
@@ -209,15 +209,23 @@ body {
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
 }
 
-.kpi-card.orange {
-    background-color: #FFF8E1; /* Light orange/cream from image */
-    border-left: 5px solid #FFB300; /* Darker orange border */
-}
-
-.kpi-card.light-green {
-    background-color: #ffffff; /* White background for the second KPI card */
+.kpi-card.white-bg { /* New class for white background KPI cards */
+    background-color: #ffffff;
     border-left: 5px solid #28a745; /* Primary green border */
 }
+
+/* Removed specific orange KPI card style as per request */
+/* .kpi-card.orange {
+    background-color: #FFF8E1;
+    border-left: 5px solid #FFB300;
+} */
+
+/* Removed specific light-green KPI card style as per request */
+/* .kpi-card.light-green {
+    background-color: #ffffff;
+    border-left: 5px solid #28a745;
+} */
+
 
 .kpi-icon {
     background-color: rgba(0, 0, 0, 0.05); /* Light background for icon */
@@ -293,7 +301,7 @@ body {
     font-size: 1.1em;
 }
 
-/* Agenda Section */
+/* Agenda Section (Replaced by Program List Section) */
 .agenda-section {
     background-color: #ffffff; /* White background */
     border-radius: 12px;
@@ -361,6 +369,108 @@ body {
     font-size: 0.95em;
 }
 
+/* Program List Section (NEW) */
+.program-list-section {
+    padding: 25px; /* Reusing .card padding */
+}
+
+.program-list-section h2 {
+    color: #28a745;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.program-cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.program-card {
+    background-color: #ffffff; /* Light background for individual program cards */
+    border: 1px solid #eee;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: left;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; /* Push button to bottom */
+}
+
+.program-card .program-name {
+    font-size: 1.3em;
+    font-weight: 600;
+    color: #333;
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+.program-card .program-meta {
+    font-size: 0.9em;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.program-card .program-status {
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 0.8em;
+    font-weight: bold;
+    color: white;
+}
+
+.program-card .program-status.ongoing {
+    background-color: #ffc107; /* Yellow/Orange for ongoing */
+}
+
+.program-card .program-status.completed {
+    background-color: #28a745; /* Green for completed */
+}
+
+.program-card .program-movements {
+    margin-top: 15px;
+    margin-bottom: 15px;
+    padding-top: 10px;
+    border-top: 1px dashed #eee;
+}
+
+.program-card .program-movements h4 {
+    font-size: 0.95em;
+    color: #555;
+    margin-top: 0;
+    margin-bottom: 8px;
+}
+
+.program-card .program-movements ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.program-card .program-movements li {
+    font-size: 0.85em;
+    color: #777;
+    margin-bottom: 3px;
+}
+
+.program-card .view-program-detail {
+    margin-top: auto; /* Push button to bottom */
+    width: 100%;
+    padding: 10px;
+    font-size: 0.95em;
+    border-radius: 8px;
+    background-color: #f1f1f1;
+    color: #28a745;
+    border: 1px solid #28a745;
+}
+
+.program-card .view-program-detail:hover {
+    background-color: #28a745;
+    color: white;
+}
+
+
 /* Chart Section */
 .chart-section {
     padding: 25px;
@@ -375,17 +485,24 @@ body {
     margin-bottom: 15px;
 }
 
-.chart-placeholder {
-    min-height: 200px;
-    background-color: #f8f9fa; /* Light background for placeholder */
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #aaa;
-    font-style: italic;
-    font-size: 0.9em;
+.chart-container {
+    position: relative;
+    height: 300px; /* Fixed height for chart */
+    width: 100%;
+    margin-bottom: 15px;
 }
+
+.chart-info {
+    font-size: 1em;
+    color: #555;
+    margin-top: 10px;
+}
+
+.chart-description {
+    font-size: 0.85em;
+    color: #777;
+}
+
 
 /* Patient List */
 .patient-list {

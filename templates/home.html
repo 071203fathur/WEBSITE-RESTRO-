@@ -1,67 +1,162 @@
-{% extends "base.html" %}
-
-{% block title %}Dashboard Terapis{% endblock %}
-
-{% block content %}
-    <div class="dashboard-header-card">
-        <div class="header-content">
-            <h2>Selamat datang, {{ username }}!</h2>
-            <p>Semoga harimu menyenangkan dan produktif.</p>
-            <div class="abstract-shape"></div>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Terapis - Monitoring Pasien</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="navbar">
+        <div class="navbar-left">
+            <img src="{{ url_for('static', filename='img/restro.png') }}" alt="Restro Logo" class="logo">
+            <a href="/home" class="{% if active_page == 'home' %}active{% endif %}">Home</a>
+            <a href="/patients" class="{% if active_page == 'patients' %}active{% endif %}">Pasien</a>
+        </div>
+        <div class="navbar-right">
+            {% if username %}
+                <span class="user-greeting">Halo, {{ username }}</span>
+            {% endif %}
+            <img src="{{ url_for('static', filename='img/terapis_profile.jpg') }}" alt="Profil Terapis" class="profile-pic">
+            <a href="/logout" class="button logout-button">Logout</a>
         </div>
     </div>
 
-    <div class="kpi-cards-wrapper">
-        <div class="kpi-card orange">
-            <div class="kpi-icon">
-                <img src="{{ url_for('static', filename='icons/users.png') }}" alt="Total Pasien" class="icon-small">
-            </div>
-            <div class="kpi-info">
-                <p class="kpi-label">Total Pasien Ditangani</p>
-                <h3 class="kpi-value">10 <span class="kpi-unit">Pasien</span></h3>
+    <div class="main-content container">
+        <div class="dashboard-header-card">
+            <div class="header-content">
+                <h2>Selamat datang, {{ username }}!</h2>
+                <p>Semoga harimu menyenangkan dan produktif.</p>
+                <div class="abstract-shape"></div>
             </div>
         </div>
 
-        <div class="kpi-card light-green">
-            <div class="kpi-icon">
-                <img src="{{ url_for('static', filename='icons/clipboard.png') }}" alt="Review" class="icon-small">
+        <div class="kpi-cards-wrapper">
+            <div class="kpi-card white-bg">
+                <div class="kpi-icon">
+                    <img src="{{ url_for('static', filename='icons/users.png') }}" alt="Total Pasien" class="icon-small">
+                </div>
+                <div class="kpi-info">
+                    <p class="kpi-label">Total Pasien Ditangani</p>
+                    <h3 class="kpi-value">{{ total_patients_handled }} <span class="kpi-unit">Pasien</span></h3>
+                </div>
             </div>
-            <div class="kpi-info">
-                <p class="kpi-label">Review Telah Dilakukan</p>
-                <h3 class="kpi-value">8 <span class="kpi-unit">Pasien</span></h3>
+
+            <div class="kpi-card white-bg">
+                <div class="kpi-icon">
+                    <img src="{{ url_for('static', filename='icons/calendar.png') }}" alt="Pasien Hari Ini" class="icon-small">
+                </div>
+                <div class="kpi-info">
+                    <p class="kpi-label">Pasien Rehabilitasi Hari Ini</p>
+                    <h3 class="kpi-value">{{ total_patients_rehab_today }} <span class="kpi-unit">Pasien</span></h3>
+                </div>
+            </div>
+
+            <div class="kpi-card white-bg">
+                <div class="kpi-icon">
+                    <img src="{{ url_for('static', filename='icons/clipboard.png') }}" alt="Pasien Selesai" class="icon-small">
+                </div>
+                <div class="kpi-info">
+                    <p class="kpi-label">Pasien Selesai Rehabilitasi</p>
+                    <h3 class="kpi-value">{{ count_patients_completed_rehab }} <span class="kpi-unit">Pasien</span></h3>
+                </div>
             </div>
         </div>
+
+        <button class="action-button primary-dark-button">
+            Review Pasien <span class="arrow-icon">▶</span>
+        </button>
+
+        <div class="program-list-section card">
+            <h2>Daftar Program Kegiatan</h2>
+            {% if therapist_programs %}
+                <div class="program-cards-container">
+                    {% for program in therapist_programs %}
+                        <div class="program-card">
+                            <h3 class="program-name">{{ program.program_name }}</h3>
+                            <p class="program-meta">Untuk: <strong>{{ program.patient_name }}</strong></p>
+                            <p class="program-meta">Tanggal: {{ program.execution_date }}</p>
+                            <p class="program-meta">Status: <span class="program-status {{ program.status }}">{{ program.status | upper }}</span></p>
+                            <div class="program-movements">
+                                <h4>Detail Gerakan:</h4>
+                                <ul>
+                                    {% for movement in program.movements_details %}
+                                        <li>{{ movement.name }} ({{ movement.count }} {{ movement.unit }})</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            <button class="button secondary view-program-detail">Lihat Detail Program</button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p>Belum ada program kegiatan yang dibuat.</p>
+            {% endif %}
+        </div>
+
+        <div class="chart-section card">
+            <h2>Statistik Pasien</h2>
+            <div class="chart-container">
+                <canvas id="patientsChart"></canvas>
+            </div>
+            <p class="chart-info">Total Pasien Keseluruhan: <strong>{{ chart_data_overall_patients }}</strong></p>
+            <p class="chart-description">Grafik ini menunjukkan tren jumlah pasien yang ditangani per bulan.</p>
+        </div>
+
     </div>
 
-    <div class="agenda-section">
-        <div class="agenda-item">
-            <div class="agenda-icon">
-                <img src="{{ url_for('static', filename='icons/calendar.png') }}" alt="Agenda" class="icon-medium">
-            </div>
-            <div class="agenda-info">
-                <p>Total Agenda Hari Ini</p>
-            </div>
-            <span class="agenda-count">6</span>
-        </div>
-
-        <div class="agenda-item next-agenda">
-            <div class="agenda-icon">
-                <img src="{{ url_for('static', filename='icons/clock.png') }}" alt="Waktu" class="icon-medium">
-            </div>
-            <div class="agenda-info">
-                <p class="agenda-label">Agenda Selanjutnya</p>
-                <p class="agenda-detail">Konsultasi Pasien - Budi Santoso</p>
-                <p class="agenda-location">RS Dr. Kariadi</p>
-            </div>
-            <span class="agenda-time">09:00 WIB</span>
-        </div>
-    </div>
-
-    <div class="chart-section card">
-        <h2>Perkembangan Pasien Keseluruhan</h2>
-        <p>Di sini akan ditampilkan grafik interaktif (misalnya, jumlah pasien baru per bulan, tren kondisi pasien, dll.)</p>
-        <div class="chart-placeholder">
-            <img src="{{ url_for('static', filename='img/chart_placeholder.png') }}" alt="Grafik" style="max-width: 100%; height: auto; opacity: 0.7;">
-        </div>
-    </div>
-{% endblock %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Data untuk grafik (dari Flask)
+            // Menggunakan JSON.parse untuk memastikan data valid
+            const chartData = JSON.parse('{{ chart_data_patients_per_month | tojson | safe }}');
+            const ctx = document.getElementById('patientsChart').getContext('2d');
+            
+            new Chart(ctx, {
+                type: 'line', // Jenis grafik: garis
+                data: {
+                    labels: chartData.labels,
+                    datasets: [{
+                        label: 'Jumlah Pasien Baru',
+                        data: chartData.data,
+                        borderColor: '#28a745', // Warna garis hijau
+                        backgroundColor: 'rgba(40, 167, 69, 0.2)', // Warna area di bawah garis
+                        fill: true,
+                        tension: 0.3 // Membuat garis sedikit melengkung
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false, // Penting untuk responsivitas
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Jumlah Pasien'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Bulan'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
