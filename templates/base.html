@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Monitoring Pasien{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    </head>
+<body>
+    <div class="navbar">
+        <div class="navbar-left">
+            <a href="/home" class="{% if active_page == 'home' %}active{% endif %}">Home</a>
+            <a href="/patients" class="{% if active_page == 'patients' %}active{% endif %}">Pasien</a>
+        </div>
+        <div class="navbar-right">
+            {% if username %}
+                <span class="user-greeting">Halo, {{ username }}</span>
+            {% endif %}
+            <img src="{{ url_for('static', filename='img/terapis_profile.jpg') }}" alt="Profil Terapis" class="profile-pic">
+            <a href="/logout" class="button logout-button">Logout</a>
+        </div>
+    </div>
+
+    <div class="main-content container">
+        {% block content %}
+        {% endblock %}
+    </div>
+</body>
+</html>

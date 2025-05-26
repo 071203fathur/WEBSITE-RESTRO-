@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}Pilih Gerakan{% endblock %}
+
+{% block content %}
+    <div class="page-header">
+        <a href="{{ url_for('add_activity', patient_id=patient.id) }}" class="back-link">&larr; Kembali ke Tambah Kegiatan</a>
+        <h1>Pilih Gerakan</h1>
+        <div class="search-bar">
+            <input type="text" id="searchMovement" placeholder="Cari gerakan..." onkeyup="filterMovements()">
+            <span class="search-icon">&#128269;</span>
+        </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('update_selected_movements', patient_id=patient.id) }}">
+        <div class="movement-grid">
+            {% for movement in movements %}
+            <label class="movement-card {% if movement.id in selected_movement_ids %}selected{% endif %}">
+                <input type="checkbox" name="selected_movements[]" value="{{ movement.id }}" {% if movement.id in selected_movement_ids %}checked{% endif %} class="movement-checkbox">
+                <img src="{{ url_for('static', filename='img/' + movement.image) }}" alt="{{ movement.name }}" class="movement-image">
+                <span class="movement-name">{{ movement.name }}</span>
+                <div class="movement-detail-overlay"
+                     data-name="{{ movement.name }}"
+                     data-description="{{ movement.description }}"
+                     data-image="{{ url_for('static', filename='img/' + movement.image) }}">
+                    <span class="detail-text">Lihat Detail</span>
+                </div>
+            </label>
+            {% endfor %}
+
+            <label class="movement-card add-new-card">
+                <input type="checkbox" disabled style="display: none;">
+                <div class="add-new-content">
+                    <span class="add-icon">+</span>
+                    <span class="add-text">Tambah gerakan</span>
+                </div>
+            </label>
+        </div>
+
+        <button type="submit" class="button primary fixed-bottom-button">Simpan Gerakan</button>
+    </form>
+
+    <div id="movementDetailModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeModal()">&times;</span>
+            <h2 id="modalMovementName"></h2>
+            <img id="modalMovementImage" src="" alt="" class="modal-image">
+            <p id="modalMovementDescription"></p>
+        </div>
+    </div>
+
+    <script>
+        // Fungsi untuk filtering gerakan berdasarkan input pencarian
+        function filterMovements() {
+            var input, filter, grid, cards, name, i;
+            input = document.getElementById("searchMovement");
+            filter = input.value.toUpperCase();
+            grid = document.querySelector(".movement-grid");
+            cards = grid.querySelectorAll(".movement-card:not(.add-new-card)"); // Kecualikan kartu "Tambah gerakan"
+
+            for (i = 0; i < cards.length; i++) {
+                name = cards[i].querySelector(".movement-name");
+                if (name.textContent.toUpperCase().indexOf(filter) > -1) {
+                    cards[i].style.display = ""; // Tampilkan
+                } else {
+                    cards[i].style.display = "none"; // Sembunyikan
+                }
+            }
+        }
+
+        // Fungsi untuk menampilkan modal detail gerakan
+        // Data diambil dari dataset elemen yang diklik
+        function showMovementDetail(event) {
+            event.preventDefault(); // Mencegah checkbox terklik saat klik detail
+            event.stopPropagation(); // Mencegah label kartu terklik juga
+            
+            const overlayElement = event.currentTarget;
+            const name = overlayElement.dataset.name;
+            const description = overlayElement.dataset.description;
+            const imageSrc = overlayElement.dataset.image;
+
+            document.getElementById("modalMovementName").textContent = name;
+            document.getElementById("modalMovementDescription").textContent = description;
+            document.getElementById("modalMovementImage").src = imageSrc;
+            document.getElementById("movementDetailModal").style.display = "flex"; // Gunakan flex untuk centering
+        }
+
+        // Fungsi untuk menutup modal
+        function closeModal() {
+            document.getElementById("movementDetailModal").style.display = "none";
+        }
+
+        // Tutup modal jika user klik di luar area modal content
+        window.onclick = function(event) {
+            var modal = document.getElementById("movementDetailModal");
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+
+        // Menambahkan/menghapus kelas 'selected' saat checkbox di-klik
+        document.querySelectorAll('.movement-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                if (this.checked) {
+                    this.closest('.movement-card').classList.add('selected');
+                } else {
+                    this.closest('.movement-card').classList.remove('selected');
+                }
+            });
+        });
+
+        // Menambahkan event listener ke overlay setelah DOM dimuat
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.movement-detail-overlay').forEach(overlay => {
+                overlay.addEventListener('click', showMovementDetail);
+            });
+        });
+    </script>
+{% endblock %}

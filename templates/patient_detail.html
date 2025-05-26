@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Detail Pasien - {{ patient.nama }}{% endblock %}
+
+{% block content %}
+    <div class="patient-detail">
+        <div class="patient-header">
+            <img src="{{ url_for('static', filename='img/' + patient.foto) }}" alt="Foto Pasien" class="patient-detail-photo">
+            <div class="patient-bio">
+                <h1>{{ patient.nama }}</h1>
+                <p><strong>Tanggal Lahir:</strong> {{ patient.tanggal_lahir }}</p>
+                <p><strong>Jenis Kelamin:</strong> {{ patient.jenis_kelamin }}</p>
+                <p><strong>Diagnosis:</strong> {{ patient.diagnosis }}</p>
+                <p><strong>Catatan Tambahan:</strong> {{ patient.catatan }}</p>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tablinks" onclick="openTab(event, 'Monitoring')" id="defaultOpen">Monitoring</button>
+            <button class="tablinks" onclick="openTab(event, 'MerumuskanGerakan')">Merumuskan Gerakan</button>
+        </div>
+
+        <div id="Monitoring" class="tabcontent">
+            <h2>Monitoring Perkembangan</h2>
+            <p>Di sini akan ditampilkan data monitoring pasien, seperti:</p>
+            <ul>
+                <li>Grafik perkembangan gerakan</li>
+                <li>Catatan harian dari pasien/keluarga</li>
+                <li>Riwayat aktivitas yang sudah dilakukan</li>
+            </ul>
+            <div class="monitoring-data">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tanggal</th>
+                            <th>Tingkat Kesulitan Gerakan</th>
+                            <th>Keterangan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>2024-05-20</td>
+                            <td>Sedang</td>
+                            <td>Sudah bisa mengangkat tangan setinggi bahu.</td>
+                        </tr>
+                        <tr>
+                            <td>2024-05-15</td>
+                            <td>Ringan</td>
+                            <td>Perlu bantuan untuk berdiri.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="MerumuskanGerakan" class="tabcontent">
+            <h2>Merumuskan Gerakan untuk Pasien</h2>
+            <p>Silakan buat program kegiatan rehabilitasi baru untuk pasien.</p>
+            <a href="{{ url_for('add_activity', patient_id=patient.id) }}" class="button primary action-button">
+                Buat Program Kegiatan Baru
+            </a>
+            <h3>Riwayat Program Rehabilitasi</h3>
+            <p>Daftar program rehabilitasi yang sudah ditugaskan akan muncul di sini.</p>
+            <!-- Contoh:
+            <ul>
+                <li>Program Rehabilitasi Minggu ke-1 (2024-05-10)</li>
+                <li>Program Peregangan Pagi (2024-05-17)</li>
+            </ul>
+            -->
+        </div>
+    </div>
+
+    <script>
+        function openTab(evt, tabName) {
+            var i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tabcontent");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+            tablinks = document.getElementsByClassName("tablinks");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
+
+        document.getElementById("defaultOpen").click();
+    </script>
+{% endblock %}

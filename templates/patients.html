@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}Daftar Pasien{% endblock %}
+
+{% block content %}
+    <h1>Daftar Pasien</h1>
+    <div class="patient-list">
+        {% for patient in patients %}
+        <div class="patient-card">
+            <img src="{{ url_for('static', filename='img/' + patient.foto) }}" alt="Foto Pasien" class="patient-photo">
+            <h3>{{ patient.nama }}</h3>
+            <p><strong>Diagnosis:</strong> {{ patient.diagnosis }}</p>
+            <a href="/patient/{{ patient.id }}" class="button primary">Lihat Detail</a>
+        </div>
+        {% endfor %}
+    </div>
+{% endblock %}

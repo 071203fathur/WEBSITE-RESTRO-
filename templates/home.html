@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard Terapis{% endblock %}
+
+{% block content %}
+    <div class="dashboard-header-card">
+        <div class="header-content">
+            <h2>Selamat datang, {{ username }}!</h2>
+            <p>Semoga harimu menyenangkan dan produktif.</p>
+            <div class="abstract-shape"></div>
+        </div>
+    </div>
+
+    <div class="kpi-cards-wrapper">
+        <div class="kpi-card orange">
+            <div class="kpi-icon">
+                <img src="{{ url_for('static', filename='icons/users.png') }}" alt="Total Pasien" class="icon-small">
+            </div>
+            <div class="kpi-info">
+                <p class="kpi-label">Total Pasien Ditangani</p>
+                <h3 class="kpi-value">10 <span class="kpi-unit">Pasien</span></h3>
+            </div>
+        </div>
+
+        <div class="kpi-card light-green">
+            <div class="kpi-icon">
+                <img src="{{ url_for('static', filename='icons/clipboard.png') }}" alt="Review" class="icon-small">
+            </div>
+            <div class="kpi-info">
+                <p class="kpi-label">Review Telah Dilakukan</p>
+                <h3 class="kpi-value">8 <span class="kpi-unit">Pasien</span></h3>
+            </div>
+        </div>
+    </div>
+
+    <button class="action-button primary-dark-button">
+        Review Pasien <span class="arrow-icon">▶</span>
+    </button>
+
+    <div class="agenda-section">
+        <div class="agenda-item">
+            <div class="agenda-icon">
+                <img src="{{ url_for('static', filename='icons/calendar.png') }}" alt="Agenda" class="icon-medium">
+            </div>
+            <div class="agenda-info">
+                <p>Total Agenda Hari Ini</p>
+            </div>
+            <span class="agenda-count">6</span>
+        </div>
+
+        <div class="agenda-item next-agenda">
+            <div class="agenda-icon">
+                <img src="{{ url_for('static', filename='icons/clock.png') }}" alt="Waktu" class="icon-medium">
+            </div>
+            <div class="agenda-info">
+                <p class="agenda-label">Agenda Selanjutnya</p>
+                <p class="agenda-detail">Konsultasi Pasien - Budi Santoso</p>
+                <p class="agenda-location">RS Dr. Kariadi</p>
+            </div>
+            <span class="agenda-time">09:00 WIB</span>
+        </div>
+    </div>
+
+    <div class="chart-section card">
+        <h2>Perkembangan Pasien Keseluruhan</h2>
+        <p>Di sini akan ditampilkan grafik interaktif (misalnya, jumlah pasien baru per bulan, tren kondisi pasien, dll.)</p>
+        <div class="chart-placeholder">
+            <img src="{{ url_for('static', filename='img/chart_placeholder.png') }}" alt="Grafik" style="max-width: 100%; height: auto; opacity: 0.7;">
+        </div>
+    </div>
+{% endblock %}
