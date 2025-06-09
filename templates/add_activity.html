@@ -1,43 +1,114 @@
 {% extends "base.html" %}
 
-{% block title %}Tambah Kegiatan Rehabilitasi - {{ patient.nama }}{% endblock %}
+{% block title %}Tambah Program Rehabilitasi - {{ patient.nama_lengkap if patient else 'Pasien' }}{% endblock %}
+
+{% block head_extra %}
+    {# Tambahkan CSS atau JS khusus jika ada #}
+    <style>
+        .movement-list-display li { margin-bottom: 0.5rem; padding: 0.5rem; background-color: #f9f9f9; border-radius: 4px; }
+        .submit-program-button { margin-top: 1.5rem; }
+    </style>
+    <link rel="icon" href="{{ url_for('static', filename='img/logo.png') }}" type="image/png">
+
+{% endblock %}
 
 {% block content %}
     <div class="page-header">
-        <a href="{{ url_for('patient_detail', patient_id=patient.id) }}" class="back-link">&larr; Kembali ke Detail Pasien</a>
-        <h1>Tambah Kegiatan Rehabilitasi</h1>
+        {# Pastikan patient.user_id tersedia dan benar dari app.py #}
+        <a href="{{ url_for('patient_detail', patient_id=patient.user_id if patient else 0) }}" class="back-link">&larr; Kembali ke Detail Pasien</a>
+        <h1>Tambah Program Rehabilitasi untuk {{ patient.nama_lengkap | default('Pasien Ini') }}</h1>
     </div>
 
-    <form method="POST" action="{{ url_for('add_activity', patient_id=patient.id) }}" class="form-card">
+    <form method="POST" action="{{ url_for('add_activity', patient_id=patient.user_id if patient else 0) }}" class="form-card" id="addProgramForm">
         <div class="form-group">
             <label for="program_name">Nama Program:</label>
-            <input type="text" id="program_name" name="program_name" placeholder="Contoh: Program Rehabilitasi Minggu ke Dua" required>
+            <input type="text" id="program_name" name="program_name" placeholder="Contoh: Program Penguatan Kaki Minggu ke-1" required>
         </div>
 
         <div class="form-group">
             <label for="terapist_name">Nama Terapis:</label>
-            <input type="text" id="terapist_name" name="terapist_name" value="{{ username }}" readonly>
+            {# 'username' di sini adalah nama lengkap terapis yang login dari session #}
+            <input type="text" id="terapist_name" name="terapist_name" value="{{ username | default('Terapis Tidak Dikenal') }}" readonly class="bg-gray-100">
         </div>
 
         <div class="form-group">
-            <label for="execution_date">Tanggal Pelaksanaan:</label>
-            <input type="date" id="execution_date" name="execution_date" required>
+            <label for="execution_date">Tanggal Pelaksanaan Program:</label>
+            <input type="date" id="execution_date" name="execution_date" required 
+                   min="{{ now.strftime('%Y-%m-%d') if now else '' }}"> {# Opsional: Mencegah tanggal lampau #}
+        </div>
+        
+        <div class="form-group">
+            <label for="catatan_terapis">Catatan Tambahan untuk Program (Opsional):</label>
+            <textarea id="catatan_terapis" name="catatan_terapis" rows="3" placeholder="Misal: Lakukan dengan jeda istirahat antar set." class="w-full p-2 border border-gray-300 rounded-md"></textarea>
         </div>
 
         <div class="form-group">
-            <label>List Gerakan:</label>
-            <ul class="movement-list-display">
-                {% if selected_movements %}
-                    {% for movement in selected_movements %}
-                        <li>{{ movement.name }} {% if movement.count and movement.unit %}({{ movement.count }} {{ movement.unit }}){% endif %}</li>
-                    {% endfor %}
-                {% else %}
-                    <li>Belum ada gerakan yang dipilih.</li>
-                {% endif %}
+            <label>List Gerakan yang Dipilih:</label>
+            <ul class="movement-list-display" id="currentSelectedMovementsList">
+                {# JavaScript akan mengisi list ini berdasarkan session #}
+                <li id="noMovementSelectedMsg">Belum ada gerakan yang dipilih.</li>
             </ul>
-            <a href="{{ url_for('select_movements', patient_id=patient.id) }}" class="button secondary add-movement-button">+ Pilih gerakan</a>
+            <a href="{{ url_for('select_movements_view', patient_id=patient.user_id if patient else 0) }}" class="button secondary add-movement-button mt-2">+ Pilih atau Ubah Gerakan</a>
         </div>
+
+        <!-- Hidden input untuk mengirim data gerakan yang dipilih sebagai JSON -->
+        <input type="hidden" name="selected_movements_data_json" id="selectedMovementsDataJson">
 
         <button type="submit" class="button primary submit-program-button">Simpan Program</button>
     </form>
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectedMovementsListElement = document.getElementById('currentSelectedMovementsList');
+    const noMovementSelectedMsgElement = document.getElementById('noMovementSelectedMsg');
+    const hiddenJsonInput = document.getElementById('selectedMovementsDataJson');
+    
+    // Ambil data gerakan yang dipilih dari session (di-pass sebagai JSON string dari Flask)
+    let selectedMovementsFromSession = [];
+    try {
+        // 'selected_movements_from_session_json' di-pass dari render_template di app.py
+        const jsonData = '{{ selected_movements_from_session_json | default("[]") | safe }}';
+        selectedMovementsFromSession = JSON.parse(jsonData);
+    } catch (e) {
+        console.error("Error parsing selected movements from session JSON:", e);
+    }
+
+    function renderSelectedMovements() {
+        selectedMovementsListElement.innerHTML = ''; // Kosongkan list
+        if (selectedMovementsFromSession && selectedMovementsFromSession.length > 0) {
+            if(noMovementSelectedMsgElement) noMovementSelectedMsgElement.style.display = 'none';
+            selectedMovementsFromSession.forEach(movement => {
+                const listItem = document.createElement('li');
+                listItem.textContent = `${movement.name || 'Nama Gerakan ?'} (${movement.count || 'N/A'} ${movement.unit || 'kali'}) - Urutan: ${movement.urutan || 'N/A'}`;
+                selectedMovementsListElement.appendChild(listItem);
+            });
+            // Isi hidden input dengan data JSON untuk disubmit
+            hiddenJsonInput.value = JSON.stringify(selectedMovementsFromSession);
+        } else {
+            if(noMovementSelectedMsgElement) {
+                 noMovementSelectedMsgElement.textContent = 'Belum ada gerakan yang dipilih.';
+                 noMovementSelectedMsgElement.style.display = 'list-item';
+            }
+            hiddenJsonInput.value = '[]'; // Kirim array kosong jika tidak ada
+        }
+    }
+
+    renderSelectedMovements(); // Panggil saat halaman dimuat
+
+    // Validasi sebelum submit (opsional, tapi baik)
+    const form = document.getElementById('addProgramForm');
+    if (form) {
+        form.addEventListener('submit', function(event){
+            if (!selectedMovementsFromSession || selectedMovementsFromSession.length === 0) {
+                alert("Silakan pilih minimal satu gerakan untuk program ini.");
+                event.preventDefault(); // Mencegah form submit
+            }
+            // Pastikan hidden input terisi
+            hiddenJsonInput.value = JSON.stringify(selectedMovementsFromSession || []);
+        });
+    }
+});
+</script>
 {% endblock %}

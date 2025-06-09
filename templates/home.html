@@ -1,158 +1,146 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Terapis - Monitoring Pasien</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+{% extends "base.html" %}
+
+{% block title %}Dashboard Terapis - Monitoring Pasien{% endblock %}
+
+{% block head_extra %}
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
-    <div class="navbar">
-        <div class="navbar-left">
-            <img src="{{ url_for('static', filename='img/restro.png') }}" alt="Restro Logo" class="logo">
-            <a href="/home" class="{% if active_page == 'home' %}active{% endif %}">Home</a>
-            <a href="/patients" class="{% if active_page == 'patients' %}active{% endif %}">Pasien</a>
-        </div>
-        <div class="navbar-right">
-            {% if username %}
-                <span class="user-greeting">Halo, {{ username }}</span>
-            {% endif %}
-            <img src="{{ url_for('static', filename='img/terapis_profile.jpg') }}" alt="Profil Terapis" class="profile-pic">
-            <a href="/logout" class="button logout-button">Logout</a>
+    {# Jika menggunakan Tailwind langsung di sini, uncomment #}
+    {# <script src="https://cdn.tailwindcss.com"></script> #}
+    {# <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"> #}
+    <link rel="icon" href="{{ url_for('static', filename='img/logo.png') }}" type="image/png">
+
+{% endblock %}
+
+{% block content %}
+    <div class="dashboard-header-card">
+        <div class="header-content">
+            <h2>Selamat datang, {{ username }}!</h2> {# username di-pass dari app.py (nama lengkap terapis) #}
+            <p>Semoga harimu menyenangkan dan produktif.</p>
+            <div class="abstract-shape"></div>
         </div>
     </div>
 
-    <div class="main-content container">
-        <div class="dashboard-header-card">
-            <div class="header-content">
-                <h2>Selamat datang, {{ username }}!</h2>
-                <p>Semoga harimu menyenangkan dan produktif.</p>
-                <div class="abstract-shape"></div>
+    <div class="kpi-cards-wrapper">
+        <div class="kpi-card white-bg">
+            <div class="kpi-icon">
+                <img src="{{ url_for('static', filename='icons/users.png') }}" alt="Total Pasien" class="icon-small">
+            </div>
+            <div class="kpi-info">
+                <p class="kpi-label">Total Pasien Ditangani</p>
+                <h3 class="kpi-value">{{ total_patients_handled | default(0) }} <span class="kpi-unit">Pasien</span></h3>
             </div>
         </div>
 
-        <div class="kpi-cards-wrapper">
-            <div class="kpi-card white-bg">
-                <div class="kpi-icon">
-                    <img src="{{ url_for('static', filename='icons/users.png') }}" alt="Total Pasien" class="icon-small">
-                </div>
-                <div class="kpi-info">
-                    <p class="kpi-label">Total Pasien Ditangani</p>
-                    <h3 class="kpi-value">{{ total_patients_handled }} <span class="kpi-unit">Pasien</span></h3>
-                </div>
+        <div class="kpi-card white-bg">
+            <div class="kpi-icon">
+                <img src="{{ url_for('static', filename='icons/calendar.png') }}" alt="Pasien Hari Ini" class="icon-small">
             </div>
-
-            <div class="kpi-card white-bg">
-                <div class="kpi-icon">
-                    <img src="{{ url_for('static', filename='icons/calendar.png') }}" alt="Pasien Hari Ini" class="icon-small">
-                </div>
-                <div class="kpi-info">
-                    <p class="kpi-label">Pasien Rehabilitasi Hari Ini</p>
-                    <h3 class="kpi-value">{{ total_patients_rehab_today }} <span class="kpi-unit">Pasien</span></h3>
-                </div>
-            </div>
-
-            <div class="kpi-card white-bg">
-                <div class="kpi-icon">
-                    <img src="{{ url_for('static', filename='icons/clipboard.png') }}" alt="Pasien Selesai" class="icon-small">
-                </div>
-                <div class="kpi-info">
-                    <p class="kpi-label">Pasien Selesai Rehabilitasi</p>
-                    <h3 class="kpi-value">{{ count_patients_completed_rehab }} <span class="kpi-unit">Pasien</span></h3>
-                </div>
+            <div class="kpi-info">
+                <p class="kpi-label">Pasien Rehabilitasi Hari Ini</p>
+                <h3 class="kpi-value">{{ total_patients_rehab_today | default(0) }} <span class="kpi-unit">Pasien</span></h3>
             </div>
         </div>
 
-        <div class="program-list-section card">
-            <h2>2 Program Kegiatan Terbaru</h2>
-            {% if therapist_programs %}
-                <div class="program-cards-container">
-                    {% for program in therapist_programs %}
-                        <div class="program-card">
-                            <h3 class="program-name">{{ program.program_name }}</h3>
-                            <p class="program-meta">Untuk: <strong>{{ program.patient_name }}</strong></p>
-                            <p class="program-meta">Tanggal: {{ program.execution_date }}</p>
-                            <p class="program-meta">Status: <span class="program-status {{ program.status }}">{{ program.status | upper }}</span></p>
-                            <div class="program-movements">
-                                <h4>Detail Gerakan:</h4>
+        <div class="kpi-card white-bg">
+            <div class="kpi-icon">
+                <img src="{{ url_for('static', filename='icons/clipboard.png') }}" alt="Pasien Selesai" class="icon-small">
+            </div>
+            <div class="kpi-info">
+                <p class="kpi-label">Pasien Selesai Rehabilitasi</p>
+                <h3 class="kpi-value">{{ count_patients_completed_rehab | default(0) }} <span class="kpi-unit">Pasien</span></h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="program-list-section card">
+        <h2>2 Program Kegiatan Terbaru</h2>
+        {% if therapist_programs %}
+            <div class="program-cards-container">
+                {% for program in therapist_programs %}
+                    <div class="program-card">
+                        <h3 class="program-name">{{ program.program_name | default('Nama Program Tidak Ada') }}</h3>
+                        <p class="program-meta">Untuk: <strong>{{ program.patient_name | default('N/A') }}</strong></p>
+                        <p class="program-meta">Tanggal: {{ program.execution_date | format_date_id if program.execution_date else 'N/A' }}</p>
+                        <p class="program-meta">Status: 
+                            <span class="program-status {{ program.status | lower | replace('_', '-') if program.status else 'unknown' }}">
+                                {{ program.status | upper | replace("_", " ") if program.status else 'N/A' }}
+                            </span>
+                        </p>
+                        <div class="program-movements">
+                            <h4>Detail Gerakan:</h4>
+                             {% if program.movements_details %}
                                 <ul>
                                     {% for movement in program.movements_details %}
-                                        <li>{{ movement.name }} ({{ movement.count }} {{ movement.unit }})</li>
+                                        <li>
+                                            {{ movement.nama_gerakan | default('Gerakan tidak diketahui') }}
+                                            {% if movement.jumlah_repetisi_direncanakan %}
+                                                ({{ movement.jumlah_repetisi_direncanakan }} 
+                                                {{ movement.unit | default('') }}) {# Asumsi 'unit' ada di detail gerakan dari API program #}
+                                            {% endif %}
+                                        </li>
                                     {% endfor %}
                                 </ul>
-                            </div>
-                            <button class="button secondary view-program-detail">Lihat Detail Program</button>
+                            {% else %}
+                                <p class="text-sm italic">Tidak ada detail gerakan.</p>
+                            {% endif %}
                         </div>
-                    {% endfor %}
-                </div>
-            {% else %}
-                <p>Belum ada program kegiatan terbaru yang dibuat.</p>
-            {% endif %}
-        </div>
-
-        <div class="chart-section card">
-            <h2>Statistik Pasien</h2>
-            <div class="chart-container">
-                <canvas id="patientsChart"></canvas>
+                        {# Tombol ini harus mengarah ke detail laporan program jika sudah ada, atau detail program jika belum #}
+                        {# Jika program_report_detail membutuhkan program_id, kita gunakan program.id #}
+                        <a href="{{ url_for('program_report_detail', patient_id=program.patient_id, program_id=program.id) }}" class="button secondary view-program-detail">Lihat Detail Program/Laporan</a>
+                    </div>
+                {% endfor %}
             </div>
-            <p class="chart-info">Total Pasien Keseluruhan: <strong>{{ chart_data_overall_patients }}</strong></p>
-            <p class="chart-description">Grafik ini menunjukkan tren jumlah pasien yang ditangani per bulan.</p>
-        </div>
-
+        {% else %}
+            <p>Belum ada program kegiatan terbaru yang Anda buat.</p>
+        {% endif %}
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Data untuk grafik (dari Flask)
-            // Menggunakan JSON.parse untuk memastikan data valid
-            const chartData = JSON.parse('{{ chart_data_patients_per_month | tojson | safe }}');
-            const ctx = document.getElementById('patientsChart').getContext('2d');
-            
-            new Chart(ctx, {
-                type: 'line', // Jenis grafik: garis
+    <div class="chart-section card">
+        <h2>Statistik Pasien</h2>
+        <div class="chart-container" style="height:300px;"> {# Beri tinggi agar chart tampil #}
+            <canvas id="patientsChart"></canvas>
+        </div>
+        <p class="chart-info">Total Pasien Ditangani oleh Anda: <strong>{{ total_patients_handled | default(0) }}</strong></p>
+        <p class="chart-description">Grafik ini menunjukkan tren jumlah pasien baru yang Anda tangani per bulan (6 bulan terakhir).</p>
+    </div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Data untuk grafik dari Flask (sudah di-pass sebagai JSON string)
+        const chartDataFromServer = JSON.parse('{{ chart_data_patients_per_month_json | default("{}") | safe }}');
+        const ctx = document.getElementById('patientsChart');
+        
+        if (ctx && chartDataFromServer && chartDataFromServer.labels && chartDataFromServer.data) {
+            new Chart(ctx.getContext('2d'), {
+                type: 'line',
                 data: {
-                    labels: chartData.labels,
+                    labels: chartDataFromServer.labels,
                     datasets: [{
-                        label: 'Jumlah Pasien Baru',
-                        data: chartData.data,
-                        borderColor: '#28a745', // Warna garis hijau
-                        backgroundColor: 'rgba(40, 167, 69, 0.2)', // Warna area di bawah garis
+                        label: 'Jumlah Pasien Baru Ditangani',
+                        data: chartDataFromServer.data,
+                        borderColor: '#28a745', 
+                        backgroundColor: 'rgba(40, 167, 69, 0.2)', 
                         fill: true,
-                        tension: 0.3 // Membuat garis sedikit melengkung
+                        tension: 0.3 
                     }]
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false, // Penting untuk responsivitas
+                    maintainAspectRatio: false,
                     scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Jumlah Pasien'
-                            }
-                        },
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Bulan'
-                            }
-                        }
+                        y: { beginAtZero: true, title: { display: true, text: 'Jumlah Pasien' } },
+                        x: { title: { display: true, text: 'Bulan' } }
                     },
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'top',
-                        },
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false,
-                        }
-                    }
+                    plugins: { legend: { display: true, position: 'top' }, tooltip: { mode: 'index', intersect: false } }
                 }
             });
-        });
-    </script>
-</body>
-</html>
+        } else {
+            console.warn("Data untuk grafik pasien per bulan tidak tersedia atau format salah.");
+            // Anda bisa menampilkan pesan di UI jika chart tidak bisa dirender
+            if(ctx) ctx.parentElement.innerHTML = "<p class='text-center italic text-gray-500'>Data grafik tidak tersedia saat ini.</p>";
+        }
+    });
+</script>
+{% endblock %}

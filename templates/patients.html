@@ -1,17 +1,95 @@
 {% extends "base.html" %}
 
-{% block title %}Daftar Pasien{% endblock %}
+{% block title %}Daftar Pasien - RESTRO{% endblock %}
+
+{% block head_extra %}
+    {# Tambahkan CSS atau JS khusus untuk halaman ini jika ada #}
+    <style>
+        .patient-grid { /* Mengganti .patient-list agar lebih deskriptif jika menggunakan grid */
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); /* Grid responsif */
+            gap: 1.5rem; /* Jarak antar kartu */
+            margin-top: 1.5rem;
+        }
+        .patient-card {
+            background-color: #ffffff;
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); /* shadow-lg */
+            padding: 1.5rem; /* p-6 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .patient-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); /* shadow-xl */
+        }
+        .patient-photo {
+            width: 100px; /* Sesuaikan ukuran foto */
+            height: 100px;
+            border-radius: 50%; /* Foto bulat */
+            object-fit: cover; /* Pastikan gambar mengisi area tanpa distorsi */
+            margin-bottom: 1rem;
+            border: 3px solid #e2e8f0; /* Border abu-abu muda */
+        }
+        .patient-card h3 {
+            font-size: 1.25rem; /* text-xl */
+            font-weight: 600; /* font-semibold */
+            color: #1f2937; /* gray-800 */
+            margin-bottom: 0.25rem;
+        }
+        .patient-card p {
+            font-size: 0.875rem; /* text-sm */
+            color: #4b5563; /* gray-600 */
+            margin-bottom: 1rem;
+        }
+        .patient-card .button.primary {
+            margin-top: auto; /* Mendorong tombol ke bawah jika konten bervariasi */
+            padding: 0.6rem 1.2rem;
+        }
+    </style>
+    <link rel="icon" href="{{ url_for('static', filename='img/logo.png') }}" type="image/png">
+
+{% endblock %}
 
 {% block content %}
-    <h1>Daftar Pasien</h1>
-    <div class="patient-list">
-        {% for patient in patients %}
-        <div class="patient-card">
-            <img src="{{ url_for('static', filename='img/' + patient.foto) }}" alt="Foto Pasien" class="patient-photo">
-            <h3>{{ patient.nama }}</h3>
-            <p><strong>Diagnosis:</strong> {{ patient.diagnosis }}</p>
-            <a href="/patient/{{ patient.id }}" class="button primary">Lihat Detail</a>
-        </div>
-        {% endfor %}
+    <div class="page-header mb-6">
+        <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Daftar Pasien Anda</h1>
+        <p class="text-gray-600 mt-1">Berikut adalah pasien yang telah atau sedang Anda tangani.</p>
     </div>
+
+    {% if patients %}
+        <div class="patient-grid">
+            {% for patient in patients %}
+            <div class="patient-card">
+                {# Menggunakan patient.foto_url (dari API) atau fallback #}
+                <img src="{{ patient.foto_url if patient.foto_url else url_for('static', filename='img/default_avatar.png') }}" 
+                    alt="Foto Pasien {{ patient.nama }}" 
+                    class="patient-photo"
+                    onerror="handleImageError(this)">
+                
+                <h3>{{ patient.nama | default('Nama Tidak Tersedia') }}</h3>
+                <p><strong>ID:</strong> {{ patient.id | default('N/A') }}</p>
+                <p><strong>Diagnosis:</strong> {{ patient.diagnosis | default('Belum ada diagnosis') }}</p>
+                <a href="{{ url_for('patient_detail', patient_id=patient.id) }}" class="button primary">Lihat Detail</a>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center py-10">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">Belum Ada Pasien</h3>
+            <p class="mt-1 text-sm text-gray-500">Anda belum menangani pasien atau tidak ada data pasien yang dapat ditampilkan.</p>
+            {# Opsional: Tombol untuk menambah pasien baru jika ada fiturnya #}
+            {# <div class="mt-6">
+                <a href="#" class="button primary">
+                    Tambah Pasien Baru
+                </a>
+            </div> #}
+        </div>
+    {% endif %}
 {% endblock %}

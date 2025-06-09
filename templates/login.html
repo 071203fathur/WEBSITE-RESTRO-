@@ -3,26 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login Terapis</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Login Terapis - Restro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styles jika diperlukan, atau untuk fallback font */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Styling untuk placeholder jika gambar logo tidak ditemukan */
+        .logo-placeholder {
+            width: 150px; /* Sesuaikan ukuran */
+            height: 50px; /* Sesuaikan ukuran */
+            background-color: #e0e0e0; /* Warna placeholder */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #757575;
+            font-size: 0.875rem;
+            border-radius: 0.375rem; /* rounded-md */
+            margin-bottom: 1.5rem; /* mb-6 */
+        }
+    </style>
+    <link rel="icon" href="{{ url_for('static', filename='img/logo.png') }}" type="image/png">
+
 </head>
-<body>
-    <div class="login-container">
-        <h1>Login Terapis</h1>
-        <form action="/login" method="POST">
-            <div class="form-group">
-                <label for="username">Username:</label>
-                <input type="text" id="username" name="username" required>
+<body class="bg-gradient-to-br from-green-400 to-[#28a745] min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white p-8 md:p-12 rounded-xl shadow-2xl w-full max-w-md transform transition-all hover:scale-105 duration-300">
+        <div class="flex justify-center mb-8">
+            <img src="static/img/restro.png" alt="Logo Restro" class="h-16 w-auto" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <div class="logo-placeholder" style="display:none;">Logo Tidak Tersedia</div>
+        </div>
+
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-2">Login Terapis</h1>
+        <p class="text-center text-gray-600 mb-8">Selamat datang kembali! Silakan masuk.</p>
+
+        <form action="/login" method="POST" class="space-y-6">
+            <div>
+                <label for="username" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <input type="text" id="username" name="username" required
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-[#28a745] focus:border-[#28a745] transition duration-150 ease-in-out"
+                       placeholder="Masukkan username Anda">
             </div>
-            <div class="form-group">
-                <label for="password">Password:</label>
-                <input type="password" id="password" name="password" required>
+
+            <div>
+                <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input type="password" id="password" name="password" required
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-[#28a745] focus:border-[#28a745] transition duration-150 ease-in-out"
+                       placeholder="Masukkan password Anda">
             </div>
-            <button type="submit">Login</button>
+
+            <button type="submit"
+                    class="w-full bg-[#28a745] hover:bg-[#1f8235] text-white font-semibold py-3 px-4 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-[#28a745] focus:ring-offset-2 transition duration-150 ease-in-out transform hover:scale-105">
+                Login
+            </button>
+
             {% if error %}
-                <p class="error-message">{{ error }}</p>
+                <p class="mt-4 text-sm text-red-600 bg-red-100 p-3 rounded-lg text-center">{{ error }}</p>
             {% endif %}
         </form>
+
+        <div class="mt-8 text-center">
+            <p class="text-sm text-gray-500">
+                Belum punya akun? <a href="#" class="font-medium text-[#28a745] hover:text-[#1f8235]">Hubungi Admin</a>
+            </p>
+        </div>
     </div>
+
+    <script>
+        // Script untuk fallback jika path Jinja2 tidak berfungsi di environment statis
+        // Ini hanya untuk demonstrasi, dalam aplikasi Flask Anda, `url_for` akan bekerja
+        document.addEventListener('DOMContentLoaded', function() {
+            const logoImg = document.querySelector('img[alt="Logo Restro"]');
+            if (logoImg && logoImg.getAttribute('src') === "{{ url_for('static', filename='img/restro.png') }}") {
+                // Jika path Jinja2 ada dan ini bukan environment Flask (misalnya, dibuka sebagai file HTML biasa)
+                // Ganti dengan path relatif atau placeholder jika gambar tidak termuat
+                logoImg.onerror = function() {
+                    this.style.display='none';
+                    const placeholder = this.nextElementSibling;
+                    if (placeholder && placeholder.classList.contains('logo-placeholder')) {
+                        placeholder.style.display='flex';
+                    }
+                    // Anda bisa mencoba path alternatif jika diperlukan
+                    // this.src = 'static/img/restro.png'; // Contoh path alternatif
+                };
+                // Untuk simulasi error jika path Jinja2 tidak bisa di-resolve di luar Flask
+                // logoImg.src = "{{ url_for('static', filename='img/restro.png') }}";
+            }
+        });
+    </script>
 </body>
 </html>

@@ -1,90 +1,345 @@
 {% extends "base.html" %}
 
-{% block title %}Detail Pasien - {{ patient.nama }}{% endblock %}
+{% block title %}Detail Pasien - {{ patient.nama_lengkap if patient else 'N/A' }}{% endblock %}
+
+{% block head_extra %}
+<script src="https://cdn.tailwindcss.com"></script> {# Jika belum ada di base.html #}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="{{ url_for('static', filename='img/logo.png') }}" type="image/png">
+
+<style>
+    /* Styling untuk tab aktif bisa ditambahkan di sini atau di style.css */
+    .tablinks.active {
+        border-color: #28a745; /* blue-600 */
+        color: #28a745;
+    }
+    .tabcontent { display: none; }
+
+    /* Styling untuk pesan info jika tidak ada data */
+    .info-message {
+        padding: 1.5rem;
+        background-color: #f0f9ff; /* blue-50 */
+        border: 1px solid #bfdbfe; /* blue-200 */
+        border-radius: 0.5rem;
+        color: #28a745; /* blue-600 */
+        text-align: center;
+        font-weight: 500;
+        margin-top: 1.5rem;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-    <div class="patient-detail">
-        <div class="patient-header">
-            <img src="{{ url_for('static', filename='img/' + patient.foto) }}" alt="Foto Pasien" class="patient-detail-photo">
-            <div class="patient-bio">
-                <h1>{{ patient.nama }}</h1>
-                <p><strong>Tanggal Lahir:</strong> {{ patient.tanggal_lahir }}</p>
-                <p><strong>Jenis Kelamin:</strong> {{ patient.jenis_kelamin }}</p>
-                <p><strong>Diagnosis:</strong> {{ patient.diagnosis }}</p>
-                <p><strong>Catatan Tambahan:</strong> {{ patient.catatan }}</p>
+    <div class="max-w-6xl mx-auto my-8 p-4 sm:p-6 lg:p-8 bg-white rounded-xl shadow-2xl">
+        <!-- Informasi Header Pasien -->
+        <div class="flex flex-col sm:flex-row items-start gap-6 pb-6 mb-6 border-b border-gray-200">
+            <img src="{{ patient.url_foto_profil if patient and patient.url_foto_profil else url_for('static', filename='img/default_avatar.png') }}"
+                alt="Foto Pasien {{ patient.nama_lengkap if patient else 'Pasien' }}"
+                class="w-32 h-32 rounded-lg object-cover border-2 border-gray-200 shadow-md flex-shrink-0"
+                onerror="handleImageError(this)">
+            
+            <div class="flex-grow">
+                <h1 class="text-3xl lg:text-4xl font-bold text-gray-800 mb-2">{{ patient.nama_lengkap | default('Nama Pasien Tidak Tersedia') }}</h1>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-600">
+                    <p><strong>ID Pasien:</strong> {{ patient.id_pasien_string | default(patient.user_id | default('N/A')) }}</p>
+                    <p><strong>Tanggal Lahir:</strong> {{ patient.tanggal_lahir | format_date_id if patient.tanggal_lahir else 'N/A' }}</p>
+                    <p><strong>Jenis Kelamin:</strong> {{ patient.jenis_kelamin | default('N/A') }}</p>
+                    <p><strong>Diagnosis:</strong> <span class="font-medium text-gray-700">{{ patient.diagnosis | default('N/A') }}</span></p>
+                </div>
+                <p class="mt-2 text-sm text-gray-600"><strong>Catatan Tambahan:</strong> {{ patient.catatan_tambahan_pasien | default('-') }}</p>
             </div>
         </div>
 
-        <div class="tabs">
-            <button class="tablinks" onclick="openTab(event, 'Monitoring')" id="defaultOpen">Monitoring</button>
-            <button class="tablinks" onclick="openTab(event, 'MerumuskanGerakan')">Merumuskan Gerakan</button>
+        <!-- Navigasi Tab -->
+        <div class="mb-6 border-b-2 border-gray-200">
+            <nav class="flex -mb-px space-x-4 sm:space-x-6 md:space-x-8" aria-label="Tabs">
+                <button class="tablinks whitespace-nowrap py-3 px-2 sm:px-4 border-b-2 font-semibold text-sm text-gray-500 hover:text-blue-600 hover:border-blue-600 focus:outline-none" onclick="openTab(event, 'Monitoring')" id="defaultOpen">
+                    Monitoring Perkembangan
+                </button>
+                <button class="tablinks whitespace-nowrap py-3 px-2 sm:px-4 border-b-2 font-semibold text-sm text-gray-500 hover:text-blue-600 hover:border-blue-600 focus:outline-none" onclick="openTab(event, 'ProgramRehab')">
+                    Program Rehabilitasi
+                </button>
+            </nav>
         </div>
 
-        <div id="Monitoring" class="tabcontent">
-            <h2>Monitoring Perkembangan</h2>
-            <p>Di sini akan ditampilkan data monitoring pasien, seperti:</p>
-            <ul>
-                <li>Grafik perkembangan gerakan</li>
-                <li>Catatan harian dari pasien/keluarga</li>
-                <li>Riwayat aktivitas yang sudah dilakukan</li>
-            </ul>
-            <div class="monitoring-data">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Tanggal</th>
-                            <th>Tingkat Kesulitan Gerakan</th>
-                            <th>Keterangan</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>2024-05-20</td>
-                            <td>Sedang</td>
-                            <td>Sudah bisa mengangkat tangan setinggi bahu.</td>
-                        </tr>
-                        <tr>
-                            <td>2024-05-15</td>
-                            <td>Ringan</td>
-                            <td>Perlu bantuan untuk berdiri.</td>
-                        </tr>
-                    </tbody>
-                </table>
+        <!-- Konten Tab: Monitoring Perkembangan -->
+        <div id="Monitoring" class="tabcontent space-y-8">
+            <h2 class="text-2xl md:text-3xl font-bold text-gray-800">Ringkasan & Tren Rehabilitasi</h2>
+            <!-- KPI Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div class="p-5 rounded-lg shadow-lg flex flex-col items-center justify-center text-white text-center transition-transform transform hover:scale-105 bg-gradient-to-br from-blue-500 to-blue-700">
+                    <p class="text-sm font-light opacity-90 mb-1">Total Sesi Selesai</p> <p id="totalSessionsCompleted" class="text-3xl font-bold">0</p>
+                </div>
+                <div class="p-5 rounded-lg shadow-lg flex flex-col items-center justify-center text-white text-center transition-transform transform hover:scale-105 bg-gradient-to-br from-green-500 to-green-700">
+                    <p class="text-sm font-light opacity-90 mb-1">Rata-rata Akurasi</p> <p id="averageAccuracy" class="text-3xl font-bold">0%</p>
+                </div>
+                <div class="p-5 rounded-lg shadow-lg flex flex-col items-center justify-center text-gray-800 text-center transition-transform transform hover:scale-105 bg-gradient-to-br from-yellow-400 to-yellow-600">
+                    <p class="text-sm font-light opacity-90 mb-1">Rata-rata Durasi Sesi</p> <p id="averageSessionDuration" class="text-3xl font-bold">0m 0s</p>
+                </div>
+                <div class="p-5 rounded-lg shadow-lg flex flex-col items-center justify-center text-white text-center transition-transform transform hover:scale-105 bg-gradient-to-br from-purple-500 to-purple-700">
+                    <p class="text-sm font-light opacity-90 mb-1">Frekuensi Latihan</p> <p id="trainingFrequency" class="text-3xl font-bold">0x</p>
+                </div>
+            </div>
+            <!-- Grafik Tren -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white rounded-xl shadow-lg p-6"><h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-3 border-gray-200">Tren Akurasi (7 Sesi Terakhir)</h3><div class="relative h-60 md:h-72"><canvas id="accuracyTrendChart"></canvas></div></div>
+                <div class="bg-white rounded-xl shadow-lg p-6"><h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-3 border-gray-200">Tren Durasi Sesi (Menit, 7 Sesi Terakhir)</h3><div class="relative h-60 md:h-72"><canvas id="durationTrendChart"></canvas></div></div>
+            </div>
+            <!-- Distribusi Hasil & Catatan -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-1 bg-white rounded-xl shadow-lg p-6"><h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-3 border-gray-200">Distribusi Hasil Gerakan (Total)</h3><div class="relative h-60 md:h-72"><canvas id="overallMovementResultChart"></canvas></div></div>
+                <div class="lg:col-span-2 bg-white rounded-xl shadow-lg p-6"><h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-3 border-gray-200">Catatan & Observasi Terbaru</h3><ul id="latestNotesList" class="space-y-3"><li class="italic text-gray-400">Memuat catatan...</li></ul></div>
+            </div>
+            <!-- Riwayat Aktivitas Monitoring -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-3 border-gray-200">Riwayat Program Selesai</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200" id="monitoringHistoryTable">
+                        <thead class="bg-gray-50"><tr>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Tanggal Program</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nama Program</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Catatan Pasien</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Aksi</th>
+                        </tr></thead>
+                        <tbody class="bg-white divide-y divide-gray-200" id="monitoringHistoryTableBody"></tbody>
+                    </table>
+                    <p id="noMonitoringHistory" class="italic text-gray-400 p-4">Belum ada riwayat program yang selesai.</p>
+                </div>
             </div>
         </div>
 
-        <div id="MerumuskanGerakan" class="tabcontent">
-            <h2>Merumuskan Gerakan untuk Pasien</h2>
-            <p>Silakan buat program kegiatan rehabilitasi baru untuk pasien.</p>
-            <a href="{{ url_for('add_activity', patient_id=patient.id) }}" class="button primary action-button">
-                Buat Program Kegiatan Baru
-            </a>
-            <h3>Riwayat Program Rehabilitasi</h3>
-            <p>Daftar program rehabilitasi yang sudah ditugaskan akan muncul di sini.</p>
-            <!-- Contoh:
-            <ul>
-                <li>Program Rehabilitasi Minggu ke-1 (2024-05-10)</li>
-                <li>Program Peregangan Pagi (2024-05-17)</li>
-            </ul>
-            -->
+        <!-- Konten Tab: Program Rehabilitasi -->
+        <div id="ProgramRehab" class="tabcontent">
+             <div class="p-0 sm:p-4 md:p-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+                    <div>
+                        <h2 class="text-2xl font-semibold text-gray-800">Program Rehabilitasi Pasien</h2>
+                        <p class="text-gray-600 mt-1">Buat dan kelola program kegiatan rehabilitasi untuk pasien ini.</p>
+                    </div>
+                    <a href="{{ url_for('add_activity', patient_id=patient.user_id if patient else '#') }}" class="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-base font-medium rounded-md shadow-sm transition-all duration-200 ease-in-out text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 mt-4 sm:mt-0">+ Buat Program Baru</a>
+                </div>
+                
+                <h3 class="text-xl font-semibold text-gray-700 mb-4">Riwayat Program Rehabilitasi Pasien</h3>
+                {% if patient_rehab_history %}
+                    <div class="overflow-x-auto bg-white rounded-lg shadow-md">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50"><tr>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nama Program</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Tanggal Pelaksanaan</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Aksi</th>
+                            </tr></thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for program in patient_rehab_history %}
+                                <tr>
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700 font-medium text-gray-900">{{ program.nama_program | default('N/A') }}</td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700">{{ program.tanggal_program | format_date_id if program.tanggal_program else 'N/A' }}</td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                                        {% set status_val = program.status | lower if program.status else '' %}
+                                        {% set status_class = 'bg-gray-100 text-gray-800' %}
+                                        {% if status_val == 'selesai' %}{% set status_class = 'bg-green-100 text-green-800' %}
+                                        {% elif status_val == 'berjalan' %}{% set status_class = 'bg-yellow-100 text-yellow-800' %}
+                                        {% elif status_val == 'belum_dimulai' %}{% set status_class = 'bg-blue-100 text-blue-800' %}
+                                        {% elif status_val == 'dibatalkan' %}{% set status_class = 'bg-red-100 text-red-700' %}
+                                        {% endif %}
+                                        <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold {{ status_class }}">{{ program.status | upper | replace("_", " ") if program.status else 'N/A' }}</span>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                                        <a href="{{ url_for('program_report_detail', patient_id=patient.user_id if patient else 0, program_id=program.id) }}" class="text-blue-600 hover:text-blue-800 font-medium hover:underline">
+                                            {{ 'Lihat Laporan' if program.status and program.status == 'selesai' else 'Lihat Detail Program' }}
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="info-message">Belum ada riwayat program rehabilitasi untuk pasien ini.</div>
+                {% endif %}
+            </div>
         </div>
     </div>
 
-    <script>
-        function openTab(evt, tabName) {
-            var i, tabcontent, tablinks;
-            tabcontent = document.getElementsByClassName("tabcontent");
-            for (i = 0; i < tabcontent.length; i++) {
-                tabcontent[i].style.display = "none";
-            }
-            tablinks = document.getElementsByClassName("tablinks");
-            for (i = 0; i < tablinks.length; i++) {
-                tablinks[i].className = tablinks[i].className.replace(" active", "");
-            }
-            document.getElementById(tabName).style.display = "block";
-            evt.currentTarget.className += " active";
+    {# Menyimpan data dari Flask/Jinja untuk diakses oleh JavaScript #}
+    <script id="monitoringDataPayload" type="application/json">
+        {{ monitoring_data_js | default('{}') | safe }}
+    </script>
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+    // Fungsi untuk menangani error gambar dan mengganti dengan fallback
+    function handleImageError(imageElement) {
+        // Implementasi Anda untuk handleImageError tetap sama
+        const fallbackUrl = "{{ url_for('static', filename='img/default_avatar.png') }}";
+        imageElement.src = fallbackUrl;
+        imageElement.onerror = null;
+    }
+
+    // Fungsi untuk membuka tab
+    function openTab(evt, tabName) {
+        var i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tabcontent");
+        for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].style.display = "none";
+        }
+        tablinks = document.getElementsByClassName("tablinks");
+        for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].classList.remove("active", "text-blue-600", "border-blue-600");
+            tablinks[i].classList.add("text-gray-500", "border-transparent");
+        }
+        const currentTab = document.getElementById(tabName);
+        if(currentTab) currentTab.style.display = "block";
+        
+        const clickedButton = evt ? evt.currentTarget : document.getElementById("defaultOpen");
+        if(clickedButton) {
+            clickedButton.classList.add("active", "text-blue-600", "border-blue-600");
+            clickedButton.classList.remove("text-gray-500", "border-transparent");
         }
 
-        document.getElementById("defaultOpen").click();
-    </script>
+        if (tabName === 'Monitoring') {
+            initializeMonitoringDashboard();
+        }
+    }
+
+    let accuracyChartInstance = null;
+    let durationChartInstance = null;
+    let movementResultChartInstance = null;
+
+    function initializeMonitoringDashboard() {
+        const monitoringDataElement = document.getElementById('monitoringDataPayload');
+        let monitoringData = {};
+        try {
+            monitoringData = JSON.parse(monitoringDataElement.textContent);
+        } catch (e) {
+            console.error("Gagal parsing data monitoring JSON:", e);
+            // Tampilkan pesan error atau kondisi kosong di UI
+            document.getElementById('totalSessionsCompleted').textContent = 'N/A';
+            // ... dan seterusnya untuk KPI lain dan grafik
+            return;
+        }
+
+        if (!monitoringData || Object.keys(monitoringData).length === 0) {
+            console.warn("Data monitoring tidak tersedia dari Flask/API.");
+            // Tampilkan pesan error atau kondisi kosong di UI jika diperlukan
+            return;
+        }
+
+        const summaryKpi = monitoringData.summary_kpi || {};
+        const trendsChartData = monitoringData.trends_chart || {};
+        const accuracyTrend = trendsChartData.akurasi_7_sesi_terakhir || { labels: [], data: [] };
+        const durationTrend = trendsChartData.durasi_7_sesi_terakhir || { labels: [], data: [] };
+        const overallResults = monitoringData.distribusi_hasil_gerakan_total || { labels: [], data: [0,0,0] };
+        const latestNotesData = monitoringData.catatan_observasi_terbaru || [];
+        const monitoringHistoryData = monitoringData.riwayat_aktivitas_monitoring || [];
+
+        // Populate KPI Cards
+        document.getElementById('totalSessionsCompleted').textContent = summaryKpi.total_sesi_selesai !== undefined ? summaryKpi.total_sesi_selesai : '0';
+        document.getElementById('averageAccuracy').textContent = `${summaryKpi.rata_rata_akurasi_persen !== undefined ? Math.round(summaryKpi.rata_rata_akurasi_persen) : '0'}%`;
+        document.getElementById('averageSessionDuration').textContent = summaryKpi.rata_rata_durasi_string || '0m 0s';
+        document.getElementById('trainingFrequency').textContent = `${summaryKpi.frekuensi_latihan_per_minggu !== undefined ? summaryKpi.frekuensi_latihan_per_minggu : '0'}x`;
+
+        // Render Grafik Tren Akurasi
+        const accuracyCtx = document.getElementById('accuracyTrendChart');
+        if (accuracyCtx) {
+            if (accuracyChartInstance) accuracyChartInstance.destroy();
+            accuracyChartInstance = new Chart(accuracyCtx.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: accuracyTrend.labels,
+                    datasets: [{ label: 'Akurasi (%)', data: accuracyTrend.data, borderColor: 'rgba(59, 130, 246, 1)', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: 'rgba(59, 130, 246, 1)'}]
+                }, 
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false, suggestedMax:100, ticks: { stepSize: 20 } } } }
+            });
+        }
+
+        // Render Grafik Tren Durasi
+        const durationCtx = document.getElementById('durationTrendChart');
+        if (durationCtx) {
+            if (durationChartInstance) durationChartInstance.destroy();
+            durationChartInstance = new Chart(durationCtx.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: durationTrend.labels,
+                    datasets: [{ label: 'Durasi (menit)', data: durationTrend.data, borderColor: 'rgba(234, 179, 8, 1)', backgroundColor: 'rgba(234, 179, 8, 0.1)', fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: 'rgba(234, 179, 8, 1)'}]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+            });
+        }
+        
+        // Render Grafik Distribusi Hasil Gerakan
+        const movementResultCtx = document.getElementById('overallMovementResultChart');
+        if (movementResultCtx) {
+            if (movementResultChartInstance) movementResultChartInstance.destroy();
+            movementResultChartInstance = new Chart(movementResultCtx.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: overallResults.labels || ['Sempurna', 'Tidak Sempurna', 'Tidak Terdeteksi'],
+                    datasets: [{
+                        data: overallResults.data || [0,0,0],
+                        backgroundColor: ['rgba(16, 185, 129, 0.9)', 'rgba(249, 115, 22, 0.9)', 'rgba(156, 163, 175, 0.9)'],
+                        borderColor: ['#ffffff'], borderWidth: 2, hoverOffset: 8
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom', labels:{ padding:12, boxWidth:12, font: { size: 12 } } } } }
+            });
+        }
+
+        // Populate Catatan Terbaru
+        const notesListEl = document.getElementById('latestNotesList');
+        if (notesListEl) {
+            notesListEl.innerHTML = ''; 
+            if (latestNotesData.length > 0) {
+                latestNotesData.forEach(item => {
+                    const listItem = document.createElement('li');
+                    listItem.className = 'p-3 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-sm transition-shadow';
+                    listItem.innerHTML = `<p class="font-medium text-gray-800">${item.catatan || 'Tidak ada catatan.'}</p>
+                                          <p class="text-xs text-gray-500 mt-1.5">Oleh: <span class="font-semibold">${item.sumber || 'N/A'}</span> - ${new Date(item.tanggal).toLocaleDateString('id-ID', {day:'2-digit', month:'long', year:'numeric'}) || 'N/A'}</p>`;
+                    notesListEl.appendChild(listItem);
+                });
+            } else {
+                notesListEl.innerHTML = '<li class="italic text-gray-500 p-3">Belum ada catatan terbaru.</li>';
+            }
+        }
+        
+        // Populate Riwayat Aktivitas Monitoring (Program Selesai)
+        const monitoringTableBodyEl = document.getElementById('monitoringHistoryTableBody');
+        const noMonitoringHistoryMsgEl = document.getElementById('noMonitoringHistory');
+        if (monitoringTableBodyEl) {
+            monitoringTableBodyEl.innerHTML = ''; 
+            if (monitoringHistoryData.length > 0) {
+                if(noMonitoringHistoryMsgEl) noMonitoringHistoryMsgEl.classList.add('hidden');
+                monitoringHistoryData.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700">${item.tanggal_program ? new Date(item.tanggal_program).toLocaleDateString('id-ID', {day:'2-digit', month:'long', year:'numeric'}) : 'N/A'}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700">${item.nama_program || 'N/A'}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700">${item.keterangan_sesi || '-'}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                            <a href="/program-report/${patient.user_id || 0}/${item.laporan_id ? item.laporan_id : (item.program_asli_id_jika_ada || 0)}" class="text-blue-600 hover:text-blue-800 font-medium">Lihat Laporan</a>
+                        </td> 
+                    `; // URL untuk Lihat Laporan perlu ID program asli jika laporan ID tidak ada
+                    monitoringTableBodyEl.appendChild(row);
+                });
+            } else {
+                if(noMonitoringHistoryMsgEl) noMonitoringHistoryMsgEl.classList.remove('hidden');
+            }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const defaultOpenButton = document.getElementById("defaultOpen");
+        if (defaultOpenButton) {
+            openTab(null, 'Monitoring'); // Buka tab Monitoring secara default
+        } else {
+            // Jika tidak ada defaultOpen, coba buka tab pertama jika ada
+            const firstTabButton = document.querySelector(".tablinks");
+            if (firstTabButton) {
+                openTab(null, firstTabButton.id === 'defaultOpen' ? 'Monitoring' : 'ProgramRehab');
+            }
+        }
+    });
+</script>
 {% endblock %}

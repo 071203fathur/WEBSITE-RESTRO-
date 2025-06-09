@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}Laporan Program Rehabilitasi{% endblock %}
+
+{% block head_extra %}
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f7fafc; }
+        .content-container { max-width: 1280px; margin: 2rem auto; padding: 1.5rem; background-color: white; border-radius: 0.75rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); }
+        /* ... (style scrollbar bisa tetap) ... */
+    </style>
+    <link rel="icon" href="{{ url_for('static', filename='img/logo.png') }}" type="image/png">
+
+{% endblock %}
+
+{% block content %}
+<div class="content-container">
+    <header class="mb-6 pb-6 border-b border-gray-200">
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-3xl font-bold text-blue-600">Laporan Program</h1>
+            {# Tombol kembali akan mengarah ke detail pasien #}
+            <a href="{{ url_for('patient_detail', patient_id=patient.id if patient and patient.id else 0) }}" class="flex items-center text-blue-600 hover:text-blue-800 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 mr-2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
+                Kembali ke Detail Pasien
+            </a>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+            <div><span class="font-semibold">Nama Pasien:</span> <span id="reportPatientName"></span></div>
+            <div><span class="font-semibold">ID Pasien:</span> <span id="reportPatientId"></span></div>
+            <div><span class="font-semibold">Program:</span> <span id="reportProgramName"></span></div>
+            <div><span class="font-semibold">Tgl. Program Direncanakan:</span> <span id="reportProgramDateScheduled"></span></div>
+            <div><span class="font-semibold">Tgl. Laporan Disubmit:</span> <span id="reportSubmissionDate"></span></div>
+            <div><span class="font-semibold">Terapis (Program):</span> <span id="reportTherapistName"></span></div>
+        </div>
+    </header>
+
+    <div id="reportContentArea">
+        {# Konten akan diisi oleh JavaScript #}
+        <p id="loadingMessage" class="text-center text-gray-500 italic py-8">Memuat data laporan...</p>
+    </div>
+    
+    <main class="grid grid-cols-1 lg:grid-cols-3 gap-8" style="display:none;" id="reportMainContent">
+        <section class="lg:col-span-2">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Detail Hasil Gerakan</h2>
+            <div class="overflow-x-auto bg-white rounded-lg shadow">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50"><tr>
+                        <th class="table-th-report">No. Urut</th>
+                        <th class="table-th-report">Nama Gerakan</th>
+                        <th class="table-th-report text-center">Direncanakan</th>
+                        <th class="table-th-report text-center">Sempurna</th>
+                        <th class="table-th-report text-center">Tidak Sempurna</th>
+                        <th class="table-th-report text-center">Tidak Terdeteksi</th>
+                        <th class="table-th-report">Waktu Aktual Gerakan</th>
+                    </tr></thead>
+                    <tbody id="reportMovementDetailsTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <aside>
+            <div class="bg-white p-6 rounded-lg shadow mb-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-1">Total Waktu Rehabilitasi Aktual</h3>
+                <p id="reportTotalRehabTime" class="text-3xl font-bold text-blue-600">00:00</p>
+            </div>
+             <div class="bg-white p-6 rounded-lg shadow mb-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-1">Catatan Pasien</h3>
+                <p id="reportPatientNotes" class="text-sm text-gray-600 italic">Tidak ada catatan.</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="text-xl font-semibold text-gray-700 mb-4">Analisis Keseluruhan Sesi Ini</h3>
+                <div class="w-full h-64 md:h-72 mb-4"><canvas id="reportOverallAnalysisChart"></canvas></div>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between"><span class="text-green-600 font-medium">Total Sempurna:</span> <span id="reportTotalPerfect" class="font-semibold">0</span></div>
+                    <div class="flex justify-between"><span class="text-orange-500 font-medium">Total Tidak Sempurna:</span> <span id="reportTotalImperfect" class="font-semibold">0</span></div>
+                    <div class="flex justify-between"><span class="text-gray-500 font-medium">Total Tidak Terdeteksi:</span> <span id="reportTotalUndetected" class="font-semibold">0</span></div>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <footer class="mt-12 text-center">
+        <a href="{{ url_for('patient_detail', patient_id=patient.id if patient else 0) }}" class="button primary">Kembali ke Detail Pasien</a>
+    </footer>
+</div>
+
+<script id="reportDataPayload" type="application/json">{{ report_data_json | default('{}') | safe }}</script>
+<script id="programInfoHeaderPayload" type="application/json">{{ program_info_header_json | default('{}') | safe }}</script>
+<script id="patientInfoHeaderPayload" type="application/json">{{ patient_info_json | default('{}') | safe }}</script>
+
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+    function formatSimpleDate(isoDateString) {
+        if (!isoDateString) return 'N/A';
+        try {
+            return new Date(isoDateString).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+        } catch (e) { return isoDateString; }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const reportDataElement = document.getElementById('reportDataPayload');
+        const programHeaderElement = document.getElementById('programInfoHeaderPayload');
+        const patientHeaderElement = document.getElementById('patientInfoHeaderPayload');
+        const loadingMessageEl = document.getElementById('loadingMessage');
+        const mainContentEl = document.getElementById('reportMainContent');
+
+        let reportData = null;
+        let programHeaderData = null;
+        let patientHeaderData = null;
+
+        try {
+            reportData = JSON.parse(reportDataElement.textContent);
+            programHeaderData = JSON.parse(programHeaderElement.textContent);
+            patientHeaderData = JSON.parse(patientHeaderElement.textContent);
+        } catch (e) {
+            console.error("Error parsing JSON data for report:", e);
+            if(loadingMessageEl) loadingMessageEl.textContent = "Gagal memuat data laporan. Silakan coba lagi.";
+            return;
+        }
+        
+        if(loadingMessageEl) loadingMessageEl.style.display = 'none';
+        if(mainContentEl) mainContentEl.style.display = 'grid'; // Atau 'block' atau 'flex' sesuai layout
+
+        // Populate Header
+        document.getElementById('reportPatientName').textContent = patientHeaderData.nama_lengkap || 'N/A';
+        document.getElementById('reportPatientId').textContent = patientHeaderData.id_pasien_string || `ID: ${patientHeaderData.id || 'N/A'}`; // Changed from user_id to id
+        document.getElementById('reportProgramName').textContent = programHeaderData.nama_program || (reportData.program_info ? reportData.program_info.nama_program : 'N/A');
+        document.getElementById('reportProgramDateScheduled').textContent = formatSimpleDate(programHeaderData.tanggal_program || (reportData.program_info ? reportData.program_info.tanggal_program_direncanakan : null));
+        document.getElementById('reportSubmissionDate').textContent = reportData.tanggal_laporan_disubmit ? formatSimpleDate(reportData.tanggal_laporan_disubmit) : 'Belum Dilaporkan';
+        document.getElementById('reportTherapistName').textContent = programHeaderData.nama_terapis_program || (reportData.program_info ? reportData.program_info.nama_terapis_program : 'N/A');
+
+
+        if (reportData && Object.keys(reportData).length > 0 && reportData.laporan_id) {
+            // Populate Detail Gerakan Hasil
+            const tableBody = document.getElementById('reportMovementDetailsTableBody');
+            tableBody.innerHTML = ''; 
+            const movementResults = reportData.detail_hasil_gerakan || [];
+            if (movementResults.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="7" class="text-center p-4 italic">Tidak ada detail hasil gerakan untuk laporan ini.</td></tr>';
+            } else {
+                movementResults.forEach((mov, index) => {
+                    const row = `
+                        <tr>
+                            <td class="table-td-report">${mov.urutan_dalam_program || (index + 1)}</td>
+                            <td class="table-td-report">${mov.nama_gerakan || 'N/A'}</td>
+                            <td class="table-td-report text-center">${mov.jumlah_repetisi_direncanakan || 'N/A'}</td>
+                            <td class="table-td-report text-center text-green-600 font-medium">${mov.jumlah_sempurna || 0}</td>
+                            <td class="table-td-report text-center text-orange-500 font-medium">${mov.jumlah_tidak_sempurna || 0}</td>
+                            <td class="table-td-report text-center text-gray-500 font-medium">${mov.jumlah_tidak_terdeteksi || 0}</td>
+                            <td class="table-td-report">${mov.waktu_aktual_per_gerakan_string || 'N/A'}</td>
+                        </tr>`;
+                    tableBody.innerHTML += row;
+                });
+            }
+
+            // Populate Summary
+            document.getElementById('reportTotalRehabTime').textContent = reportData.total_waktu_rehabilitasi_string || "00:00";
+            document.getElementById('reportPatientNotes').textContent = reportData.catatan_pasien_laporan || "Tidak ada catatan dari pasien.";
+            
+            const summaryTotals = reportData.summary_total_hitungan || {sempurna:0, tidak_sempurna:0, tidak_terdeteksi:0};
+            document.getElementById('reportTotalPerfect').textContent = summaryTotals.sempurna;
+            document.getElementById('reportTotalImperfect').textContent = summaryTotals.tidak_sempurna;
+            document.getElementById('reportTotalUndetected').textContent = summaryTotals.tidak_terdeteksi;
+
+            // Initialize Chart
+            const chartCtx = document.getElementById('reportOverallAnalysisChart');
+            if (chartCtx) {
+                 new Chart(chartCtx.getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Sempurna', 'Tidak Sempurna', 'Tidak Terdeteksi'],
+                        datasets: [{
+                            data: [summaryTotals.sempurna, summaryTotals.tidak_sempurna, summaryTotals.tidak_terdeteksi],
+                            backgroundColor: ['rgba(16, 185, 129, 0.8)','rgba(249, 115, 22, 0.8)','rgba(156, 163, 175, 0.8)'],
+                            borderColor: ['#fff', '#fff', '#fff'], borderWidth: 2, hoverOffset: 4
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom'}}}
+                });
+            }
+
+        } else {
+            // Tampilkan pesan bahwa laporan belum ada atau tidak valid
+            document.getElementById('reportMovementDetailsTableBody').innerHTML = '<tr><td colspan="7" class="text-center p-4 italic">Laporan untuk program ini belum tersedia atau data tidak lengkap.</td></tr>';
+            document.getElementById('reportTotalRehabTime').textContent = "N/A";
+            document.getElementById('reportTotalPerfect').textContent = "N/A";
+            document.getElementById('reportTotalImperfect').textContent = "N/A";
+            document.getElementById('reportTotalUndetected').textContent = "N/A";
+            const chartContainer = document.getElementById('reportOverallAnalysisChart')?.parentElement;
+            if (chartContainer) chartContainer.innerHTML = "<p class='text-center italic text-gray-500'>Data analisis tidak tersedia.</p>";
+        }
+    });
+</script>
+{% endblock %}

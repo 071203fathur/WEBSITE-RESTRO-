@@ -3,28 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Monitoring Pasien{% endblock %}</title>
+    <title>{% block title %}Monitoring Pasien RESTRO{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    </head>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    {% block head_extra %}{% endblock %}
+</head>
 <body>
-    <div class="navbar">
+    <nav class="navbar">
         <div class="navbar-left">
-            <img src="{{ url_for('static', filename='img/restro.png') }}" alt="Restro Logo" class="logo">
-            <a href="/home" class="{% if active_page == 'home' %}active{% endif %}">Home</a>
-            <a href="/patients" class="{% if active_page == 'patients' %}active{% endif %}">Pasien</a>
+            <a href="{{ url_for('home') }}">
+                <img src="{{ url_for('static', filename='img/restro.png') }}" alt="Restro Logo" class="logo" onerror="this.onerror=null; this.src='https://placehold.co/100x40/e2e8f0/333333?text=Logo';this.alt='Logo Placeholder';">
+            </a>
+            <a href="{{ url_for('home') }}" class="nav-link {% if active_page == 'home' %}active{% endif %}">Home</a>
+            <a href="{{ url_for('patients') }}" class="nav-link {% if active_page == 'patients' %}active{% endif %}">Pasien</a>
         </div>
         <div class="navbar-right">
-            {% if username %}
-                <span class="user-greeting">Halo, {{ username }}</span>
-            {% endif %}
-            <img src="{{ url_for('static', filename='img/terapis_profile.jpg') }}" alt="Profil Terapis" class="profile-pic">
-            <a href="/logout" class="button logout-button">Logout</a>
+            <span class="user-greeting">Halo, {{ session.user_info.nama_lengkap if session.get('user_info') and session.user_info.nama_lengkap else (session.user_info.username if session.get('user_info') and session.user_info.username else 'Terapis') }}</span>
+            <img src="{{ session.user_info.url_foto_profil if session.get('user_info') and session.user_info.url_foto_profil else url_for('static', filename='img/terapis_profile.jpg') }}" 
+                alt="Profil Terapis" 
+                class="profile-pic" 
+                onerror="this.onerror=null; this.src='https://placehold.co/40x40/e2e8f0/333333?text=P';this.alt='User';">
+            <a href="{{ url_for('logout') }}" 
+                class="button logout-button bg-red-500 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-md text-sm transition-colors duration-150">
+                Logout
+            </a>
         </div>
-    </div>
+    </nav>
 
-    <div class="main-content container">
+    <main class="main-content container mx-auto px-4 py-8">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages-container mb-4">
+                    {% for category, message in messages %}
+                        <div class="flash-message {{ category }} p-3 my-2 rounded-md text-sm border 
+                                        {% if category == 'success' %} bg-green-100 border-green-400 text-green-700 
+                                        {% elif category == 'danger' or category == 'error' %} bg-red-100 border-red-400 text-red-700 
+                                        {% elif category == 'warning' %} bg-yellow-100 border-yellow-400 text-yellow-700 
+                                        {% else %} bg-blue-100 border-blue-400 text-blue-700 {% endif %}"
+                                    role="alert">
+                                {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
         {% block content %}
+        {# Konten spesifik halaman akan dirender di sini #}
         {% endblock %}
-    </div>
+    </main>
+
+    <footer class="text-center py-6 mt-10 border-t border-gray-200 text-sm text-gray-500">
+        <p>&copy; {{ now.year if now else '2025' }} RESTRO Rehabilitasi. Hak Cipta Dilindungi.</p>
+    </footer>
+
+    {% block scripts_extra %}{% endblock %}
 </body>
 </html>
