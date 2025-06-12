@@ -29,7 +29,7 @@
 
 {% block content %}
     <div class="page-header">
-        <a href="{{ url_for('add_activity', patient_id=patient.user_id if patient else 0) }}" class="back-link">&larr; Kembali ke Form Program</a>
+        <a href="{{ url_for('add_activity', patient_id=patient.id if patient else 0) }}" class="back-link">&larr; Kembali ke Form Program</a>
         <h1>Pilih Gerakan untuk Program "{{ patient.nama_lengkap | default('Pasien Ini') }}"</h1>
         <div class="search-bar">
             <input type="text" id="searchMovementInput" placeholder="Cari gerakan..." class="p-2 border rounded w-full md:w-1/2">
@@ -46,7 +46,8 @@
                     {# Gunakan movement.url_foto dari API jika ada, atau placeholder #}
                     <img src="{{ movement.url_foto if movement.url_foto else url_for('static', filename='img/default-gerakan.png') }}"
                         alt="{{ movement.nama_gerakan }}" class="movement-image"
-                        onerror="handleImageError(this)">
+                        this.onerror = null; 
+                         this.src = "{{ url_for('static', filename='img/default-gerakan.png') }}"; >
                     <span class="movement-name">{{ movement.nama_gerakan }}</span>
                     
                     <div class="repetition-input-group" style="display: none;">
@@ -199,7 +200,7 @@
     document.getElementById('saveSelectedMovementsButton').addEventListener('click', function() {
         const movementsToSave = Object.values(selectedMovementsData);
         // Kirim ke backend Flask (Website-Monitoring) untuk disimpan di session
-        fetch("{{ url_for('update_selected_movements_view', patient_id=patient.user_id if patient else 0) }}", {
+        fetch("{{ url_for('update_selected_movements_view', patient_id=patient.id if patient else 0) }}", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ selected_movements: movementsToSave })
@@ -208,7 +209,7 @@
         .then(data => {
             if (data.msg) {
                 // Redirect kembali ke halaman add_activity
-                window.location.href = "{{ url_for('add_activity', patient_id=patient.user_id if patient else 0) }}";
+                window.location.href = "{{ url_for('add_activity', patient_id=patient.id if patient else 0) }}";
             } else {
                 alert('Gagal menyimpan pilihan gerakan: ' + (data.error || 'Error tidak diketahui'));
             }
@@ -259,5 +260,5 @@
     // Panggil validasi awal
     updateSaveButtonState();
 </script>
+</script>
 {% endblock %}
-

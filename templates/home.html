@@ -75,7 +75,8 @@
                                             {{ movement.nama_gerakan | default('Gerakan tidak diketahui') }}
                                             {% if movement.jumlah_repetisi_direncanakan %}
                                                 ({{ movement.jumlah_repetisi_direncanakan }} 
-                                                {{ movement.unit | default('') }}) {# Asumsi 'unit' ada di detail gerakan dari API program #}
+                                                {# Asumsi 'unit' ada di detail gerakan dari API program, jika tidak ada bisa dihapus atau di-default #}
+                                                {{ movement.unit | default('kali') }}) 
                                             {% endif %}
                                         </li>
                                     {% endfor %}
@@ -112,34 +113,38 @@
         const chartDataFromServer = JSON.parse('{{ chart_data_patients_per_month_json | default("{}") | safe }}');
         const ctx = document.getElementById('patientsChart');
         
-        if (ctx && chartDataFromServer && chartDataFromServer.labels && chartDataFromServer.data) {
-            new Chart(ctx.getContext('2d'), {
-                type: 'line',
-                data: {
-                    labels: chartDataFromServer.labels,
-                    datasets: [{
-                        label: 'Jumlah Pasien Baru Ditangani',
-                        data: chartDataFromServer.data,
-                        borderColor: '#28a745', 
-                        backgroundColor: 'rgba(40, 167, 69, 0.2)', 
-                        fill: true,
-                        tension: 0.3 
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { beginAtZero: true, title: { display: true, text: 'Jumlah Pasien' } },
-                        x: { title: { display: true, text: 'Bulan' } }
+        if (ctx) {
+            if (chartDataFromServer && chartDataFromServer.labels && chartDataFromServer.data) {
+                new Chart(ctx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: chartDataFromServer.labels,
+                        datasets: [{
+                            label: 'Jumlah Pasien Baru Ditangani',
+                            data: chartDataFromServer.data,
+                            borderColor: '#28a745', 
+                            backgroundColor: 'rgba(40, 167, 69, 0.2)', 
+                            fill: true,
+                            tension: 0.3 
+                        }]
                     },
-                    plugins: { legend: { display: true, position: 'top' }, tooltip: { mode: 'index', intersect: false } }
-                }
-            });
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { beginAtZero: true, title: { display: true, text: 'Jumlah Pasien' } },
+                            x: { title: { display: true, text: 'Bulan' } }
+                        },
+                        plugins: { legend: { display: true, position: 'top' }, tooltip: { mode: 'index', intersect: false } }
+                    }
+                });
+            } else {
+                console.warn("Data untuk grafik pasien per bulan tidak tersedia atau format salah.");
+                // Anda bisa menampilkan pesan di UI jika chart tidak bisa dirender
+                ctx.parentElement.innerHTML = "<p class='text-center italic text-gray-500'>Data grafik tidak tersedia saat ini.</p>";
+            }
         } else {
-            console.warn("Data untuk grafik pasien per bulan tidak tersedia atau format salah.");
-            // Anda bisa menampilkan pesan di UI jika chart tidak bisa dirender
-            if(ctx) ctx.parentElement.innerHTML = "<p class='text-center italic text-gray-500'>Data grafik tidak tersedia saat ini.</p>";
+            console.error("Canvas element 'patientsChart' not found.");
         }
     });
 </script>

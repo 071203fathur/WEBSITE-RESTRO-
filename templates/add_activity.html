@@ -15,11 +15,11 @@
 {% block content %}
     <div class="page-header">
         {# Pastikan patient.user_id tersedia dan benar dari app.py #}
-        <a href="{{ url_for('patient_detail', patient_id=patient.user_id if patient else 0) }}" class="back-link">&larr; Kembali ke Detail Pasien</a>
+        <a href="{{ url_for('patient_detail', patient_id=patient.id if patient else 0) }}" class="back-link">&larr; Kembali ke Detail Pasien</a>
         <h1>Tambah Program Rehabilitasi untuk {{ patient.nama_lengkap | default('Pasien Ini') }}</h1>
     </div>
 
-    <form method="POST" action="{{ url_for('add_activity', patient_id=patient.user_id if patient else 0) }}" class="form-card" id="addProgramForm">
+    <form method="POST" action="{{ url_for('add_activity', patient_id=patient.id if patient else 0) }}" class="form-card" id="addProgramForm">
         <div class="form-group">
             <label for="program_name">Nama Program:</label>
             <input type="text" id="program_name" name="program_name" placeholder="Contoh: Program Penguatan Kaki Minggu ke-1" required>
@@ -48,7 +48,7 @@
                 {# JavaScript akan mengisi list ini berdasarkan session #}
                 <li id="noMovementSelectedMsg">Belum ada gerakan yang dipilih.</li>
             </ul>
-            <a href="{{ url_for('select_movements_view', patient_id=patient.user_id if patient else 0) }}" class="button secondary add-movement-button mt-2">+ Pilih atau Ubah Gerakan</a>
+            <a href="{{ url_for('select_movements_view', patient_id=patient.id if patient else 0) }}" class="button secondary add-movement-button mt-2">+ Pilih atau Ubah Gerakan</a>
         </div>
 
         <!-- Hidden input untuk mengirim data gerakan yang dipilih sebagai JSON -->
@@ -75,6 +75,14 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error("Error parsing selected movements from session JSON:", e);
     }
 
+    // Ambil data form yang disimpan dari sesi (di-pass sebagai JSON string dari Flask)
+    const formData = JSON.parse('{{ form_data | default("{}") | safe }}');
+    if (formData) {
+        document.getElementById('program_name').value = formData.program_name || '';
+        document.getElementById('execution_date').value = formData.execution_date || '';
+        document.getElementById('catatan_terapis').value = formData.catatan_terapis || '';
+    }
+
     function renderSelectedMovements() {
         selectedMovementsListElement.innerHTML = ''; // Kosongkan list
         if (selectedMovementsFromSession && selectedMovementsFromSession.length > 0) {
@@ -89,13 +97,38 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             if(noMovementSelectedMsgElement) {
                  noMovementSelectedMsgElement.textContent = 'Belum ada gerakan yang dipilih.';
-                 noMovementSelectedMsgElement.style.display = 'list-item';
+                 noMovementSelectedMsgCElement.style.display = 'list-item';
             }
             hiddenJsonInput.value = '[]'; // Kirim array kosong jika tidak ada
         }
     }
 
     renderSelectedMovements(); // Panggil saat halaman dimuat
+
+    // Simpan data form sementara ke sesi setiap kali ada perubahan pada input
+    const formInputs = document.querySelectorAll('#addProgramForm input, #addProgramForm textarea, #addProgramForm select');
+    formInputs.forEach(input => {
+        input.addEventListener('input', function() {
+            const currentFormData = {
+                program_name: document.getElementById('program_name').value,
+                execution_date: document.getElementById('execution_date').value,
+                catatan_terapis: document.getElementById('catatan_terapis').value
+            };
+            fetch("{{ url_for('save_add_activity_form_temp') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(currentFormData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                // console.log("Form data saved temporarily:", data.msg);
+            })
+            .catch(error => {
+                console.error('Error saving form data temporarily:', error);
+            });
+        });
+    });
+
 
     // Validasi sebelum submit (opsional, tapi baik)
     const form = document.getElementById('addProgramForm');

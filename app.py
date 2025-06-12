@@ -10,7 +10,7 @@ app = Flask(__name__)
 app.secret_key = 'website_monitoring_super_secret_key_CHANGE_ME_PLEASE_AGAIN' 
 
 # --- Konfigurasi untuk API Backend BE-RESTRO ---
-API_BASE_URL = "https://be-restro-api-fnfpghddbka7d4aw.eastasia-01.azurewebsites.net"
+API_BASE_URL = "http://127.0.0.1:5001"
 
 # --- Fungsi Helper untuk Request ke API Backend ---
 def api_request(method, endpoint, data=None, params=None, files=None, use_token=True):
@@ -146,7 +146,12 @@ def home():
     
     dashboard_data_resp, status_code, _ = api_request('GET', '/api/terapis/dashboard-summary')
     
-    kpi_data = {}
+    # Initialize with default values
+    kpi_data = {
+        "pasien_rehabilitasi_hari_ini": 0,
+        "pasien_selesai_rehabilitasi_hari_ini": 0,
+        "total_pasien_ditangani": 0
+    }
     programs_for_display_home = []
     chart_data_patients_per_month = {'labels': [], 'data': []} 
     
@@ -155,17 +160,31 @@ def home():
         programs_for_display_home_raw = dashboard_data_resp.get('program_terbaru_terapis', [])
         
         for p_data in programs_for_display_home_raw:
+             # Ensure program.id and program.patient_id are integers, with fallback to 0
+             program_id = p_data.get('id')
+             patient_id_for_program = p_data.get('patient_id')
+             
+             try:
+                 program_id = int(program_id) if program_id is not None else 0
+             except (ValueError, TypeError):
+                 program_id = 0
+             
+             try:
+                 patient_id_for_program = int(patient_id_for_program) if patient_id_for_program is not None else 0
+             except (ValueError, TypeError):
+                 patient_id_for_program = 0
+
              programs_for_display_home.append({
-                 'id': p_data.get('id'), 
-                 'program_name': p_data.get('nama_program'),
-                 'patient_name': p_data.get('pasien', {}).get('nama_lengkap', 'N/A'),
-                 'patient_id': p_data.get('pasien', {}).get('id'), 
-                 'execution_date': p_data.get('tanggal_program'), 
+                 'id': program_id, 
+                 'program_name': p_data.get('program_name'), # Corrected key
+                 'patient_name': p_data.get('patient_name'), # Corrected key
+                 'patient_id': patient_id_for_program, # Corrected key
+                 'execution_date': p_data.get('execution_date'), # Corrected key
                  'status': p_data.get('status'),
-                 'movements_details_summary': f"{len(p_data.get('list_gerakan_direncanakan', []))} gerakan" 
+                 'movements_details': p_data.get('movements_details', []) # Pass full movements_details
              })
 
-        statistik_bulanan = dashboard_data_resp.get('statistik_pasien_baru_bulanan_terapis', {})
+        statistik_bulanan = dashboard_data_resp.get('chart_data_patients_per_day', {}) # Use chart_data_patients_per_day as per API response
         chart_data_patients_per_month['labels'] = statistik_bulanan.get('labels', [])
         chart_data_patients_per_month['data'] = statistik_bulanan.get('data', [])
     else:
@@ -179,12 +198,19 @@ def home():
         
         flash(f"Gagal mengambil data dashboard terapis: {str(error_message_from_api)}", "warning")
 
+    # Map KPI data to more readable names for the template
+    total_patients_handled = kpi_data.get('total_pasien_ditangani', 0)
+    total_patients_rehab_today = kpi_data.get('pasien_rehabilitasi_hari_ini', 0)
+    count_patients_completed_rehab = kpi_data.get('pasien_selesai_rehabilitasi_hari_ini', 0)
+
 
     return render_template(
         'home.html',
         username=user_info.get('nama_lengkap', user_info.get('username')),
         active_page='home',
-        kpi_data=kpi_data,
+        total_patients_handled=total_patients_handled,
+        total_patients_rehab_today=total_patients_rehab_today,
+        count_patients_completed_rehab=count_patients_completed_rehab,
         therapist_programs=programs_for_display_home, 
         chart_data_patients_per_month_json=json.dumps(chart_data_patients_per_month)
     )
@@ -245,6 +271,11 @@ def patient_detail(patient_id):
     patient_info_for_header = {} 
     if monitoring_status == 200 and isinstance(monitoring_data_api, dict):
         patient_info_for_header = monitoring_data_api.get('pasien_info', {})
+        
+        # Ensure 'id' key exists in patient_info_for_header, using 'user_id' from API if available
+        # Otherwise, fall back to the patient_id from the URL
+        patient_info_for_header['id'] = patient_info_for_header.get('user_id', patient_id)
+
         if 'nama' not in patient_info_for_header and 'nama_lengkap' in patient_info_for_header:
             patient_info_for_header['nama'] = patient_info_for_header['nama_lengkap']
         foto_profil_val = patient_info_for_header.get('url_foto_profil', patient_info_for_header.get('foto_filename'))
@@ -252,6 +283,17 @@ def patient_detail(patient_id):
              patient_info_for_header['foto_src_display'] = foto_profil_val
         else:
              patient_info_for_header['foto_src_display'] = url_for('static', filename='img/default_avatar.png')
+
+        # Add flash messages for missing sections from monitoring_data_api
+        if not monitoring_data_api.get('summary_kpi'):
+            flash("Informasi KPI pasien tidak tersedia dari API ringkasan.", "info")
+        if not monitoring_data_api.get('trends_chart'):
+            flash("Data tren grafik pasien tidak tersedia dari API ringkasan.", "info")
+        if not monitoring_data_api.get('distribusi_hasil_gerakan_total'):
+            flash("Data distribusi gerakan tidak tersedia dari API ringkasan.", "info")
+        if not monitoring_data_api.get('catatan_observasi_terbaru'):
+            flash("Catatan observasi terbaru tidak tersedia dari API ringkasan.", "info")
+            
     else:
         error_detail = "Error tidak diketahui dari server."
         if isinstance(monitoring_data_api, dict):
@@ -259,6 +301,7 @@ def patient_detail(patient_id):
         flash(f"Gagal mengambil data monitoring untuk pasien ID {patient_id}. Pesan: {str(error_detail)}", 'danger')
         return redirect(url_for('patients'))
 
+    # REVERTED: Fetch patient_rehab_history from its dedicated API endpoint
     rehab_history_resp, rehab_history_status, _ = api_request('GET', f'/api/program/terapis/assigned-to-patient/{patient_id}', params={'per_page': 100})
     
     patient_rehab_history_for_tab = []
@@ -266,11 +309,19 @@ def patient_detail(patient_id):
         patient_rehab_history_for_tab = rehab_history_resp['programs']
     elif isinstance(rehab_history_resp, dict) and 'msg' in rehab_history_resp:
           flash(f"Info: Gagal mengambil riwayat program rehabilitasi: {str(rehab_history_resp['msg'])}", "info")
+    else:
+          flash("Info: Riwayat program rehabilitasi tidak tersedia atau gagal diambil.", "info")
+
+    # Patient meal plans (currently stored in session)
+    # Since there's no API to fetch existing meal plans, we'll continue to rely on the session
+    # for displaying previously added meal plans within the current session.
+    patient_meal_plans = session.get(f'meal_plans_patient_{patient_id}', [])
 
     return render_template('patient_detail.html', 
                            patient=patient_info_for_header, 
                            monitoring_data_js=json.dumps(monitoring_data_api if isinstance(monitoring_data_api,dict) else {}),
                            patient_rehab_history=patient_rehab_history_for_tab, 
+                           patient_meal_plans_json=json.dumps(patient_meal_plans), 
                            username=get_current_user_name(),
                            active_page='patients')
 
@@ -298,6 +349,8 @@ def add_activity(patient_id):
     patient_info_for_form = {}
     if pi_status == 200 and isinstance(patient_info_resp, dict) and 'pasien_info' in patient_info_resp:
         patient_info_for_form = patient_info_resp['pasien_info']
+        # Ensure 'id' key exists for form, using 'user_id' from API if available
+        patient_info_for_form['id'] = patient_info_for_form.get('user_id', patient_id)
     else:
         flash(f"Gagal mengambil info pasien (ID: {patient_id}).", "danger")
         return redirect(url_for('patient_detail', patient_id=patient_id))
@@ -305,6 +358,14 @@ def add_activity(patient_id):
     # Ambil data form yang disimpan dari sesi untuk request GET
     # Gunakan .pop() untuk menghapus data dari sesi setelah diambil
     saved_form_data = session.pop('add_activity_form_data', {}) 
+    if 'execution_date' in saved_form_data and saved_form_data['execution_date']:
+        try:
+            # Reformat the date to YYYY-MM-DD for the input type="date"
+            saved_form_data['execution_date'] = datetime.strptime(saved_form_data['execution_date'], '%Y-%m-%d').strftime('%Y-%m-%d')
+        except ValueError:
+            # If the format is already different or invalid, keep it as is or handle error
+            pass
+
 
     if request.method == 'POST':
         try:
@@ -387,6 +448,9 @@ def select_movements_view(patient_id):
     gerakan_resp, _, _ = api_request('GET', '/api/gerakan', params={'per_page': 1000}) 
     
     patient_info = patient_info_resp.get('pasien_info', {}) if isinstance(patient_info_resp, dict) else {}
+    # Ensure 'id' key exists for patient_info, using 'user_id' from API if available
+    patient_info['id'] = patient_info.get('user_id', patient_id)
+
     all_movements = gerakan_resp.get('gerakan', []) if isinstance(gerakan_resp, dict) else []
 
     selected_in_session = []
@@ -415,6 +479,60 @@ def update_selected_movements_view(patient_id):
     session['patient_id_for_activity'] = patient_id 
     return jsonify({"msg": "Pilihan gerakan berhasil disimpan di sesi."}), 200
 
+# MODIFIED: Route for saving meal plan, now integrates with /api/terapis/diet-plan
+@app.route('/api/terapis/diet-plan', methods=['POST'])
+def create_diet_plan():
+    if not is_logged_in() or get_current_user_role() != 'terapis':
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    request_data = request.get_json()
+    if not request_data:
+        return jsonify({"error": "No data provided"}), 400
+
+    # Extract data according to the API spec
+    pasien_id = request_data.get('pasien_id')
+    tanggal_makan = request_data.get('tanggal_makan')
+    menu_pagi = request_data.get('menu_pagi', '')
+    menu_siang = request_data.get('menu_siang', '')
+    menu_malam = request_data.get('menu_malam', '')
+    cemilan = request_data.get('cemilan', '')
+
+    # Basic validation (add more as needed)
+    if not pasien_id or not tanggal_makan:
+        return jsonify({"error": "Data tidak lengkap: pasien_id dan tanggal_makan wajib diisi."}), 400
+
+    api_payload = {
+        "pasien_id": pasien_id,
+        "tanggal_makan": tanggal_makan,
+        "menu_pagi": menu_pagi,
+        "menu_siang": menu_siang,
+        "menu_malam": menu_malam,
+        "cemilan": cemilan
+    }
+
+    # Call the backend API
+    api_response, status_code, _ = api_request('POST', '/api/terapis/diet-plan', data=api_payload)
+
+    if status_code == 201:
+        flash('Pola makan berhasil dibuat!', 'success')
+        # Optionally, you might want to refresh the local session's meal plans
+        # by fetching from a (hypothetical) API that retrieves all meal plans for a patient.
+        # Since that API isn't provided, we'll mimic by updating the session here
+        # to include the newly created plan (for display purposes).
+        # In a real app, you'd fetch the updated list from the backend.
+        
+        # Add the new meal plan to the session data for immediate display
+        patient_meal_plans = session.get(f'meal_plans_patient_{pasien_id}', [])
+        patient_meal_plans.append(api_response.get('pola_makan', api_payload)) # Use returned data if available, else request payload
+        session[f'meal_plans_patient_{pasien_id}'] = patient_meal_plans
+
+        return jsonify(api_response), 201
+    else:
+        error_msg = api_response.get('msg', api_response.get('error', 'Terjadi kesalahan saat membuat pola makan.'))
+        flash(f"Gagal membuat pola makan: {error_msg}", 'danger')
+        return jsonify(api_response), status_code
+
+
 @app.route('/program-report/<int:patient_id>/<int:program_id>')
 def program_report_detail(patient_id, program_id):
     if not is_logged_in() or get_current_user_role() != 'terapis':
@@ -424,43 +542,43 @@ def program_report_detail(patient_id, program_id):
     program_info_for_header = None
     patient_data_for_template = {} 
 
-    laporan_data_api, laporan_status, _ = api_request('GET', f'/api/laporan/by-program/{program_id}')
-    
-    if laporan_status == 200 and isinstance(laporan_data_api, dict) and 'laporan' in laporan_data_api:
-        report_data_for_template = laporan_data_api['laporan']
-        if report_data_for_template: 
-            program_info_for_header = report_data_for_template.get('program_info')
-            patient_data_for_template = report_data_for_template.get('pasien_info', {})
-    elif laporan_status == 404: 
-        program_resp, prog_status, _ = api_request('GET', f'/api/program/{program_id}')
-        if prog_status == 200 and isinstance(program_resp, dict) and 'program' in program_resp :
-            program_data_from_api = program_resp['program']
-            program_info_for_header = {
-                "id": program_data_from_api.get("id"),
-                "nama_program": program_data_from_api.get("nama_program"),
-                "tanggal_program": program_data_from_api.get("tanggal_program"),
-                "nama_terapis_program": program_data_from_api.get("terapis", {}).get("nama_lengkap", "N/A")
-            }
-            patient_data_for_template = program_data_from_api.get('pasien', {})
-            program_name_for_flash = program_info_for_header.get('nama_program', 'N/A') if isinstance(program_info_for_header, dict) else 'N/A'
-            flash(f"Laporan untuk program '{str(program_name_for_flash)}' belum disubmit oleh pasien.", "info")
+    # Attempt to fetch program details first, as it might contain 'laporan_terkait'
+    program_resp, prog_status, _ = api_request('GET', f'/api/program/{program_id}')
+
+    if prog_status == 200 and isinstance(program_resp, dict) and 'program' in program_resp:
+        program_data_from_api = program_resp['program']
+        
+        # Populate program_info_for_header from the program data
+        program_info_for_header = {
+            "id": program_data_from_api.get("id"),
+            "nama_program": program_data_from_api.get("nama_program"),
+            "tanggal_program": program_data_from_api.get("tanggal_program"),
+            "nama_terapis_program": program_data_from_api.get("terapis", {}).get("nama_lengkap", "N/A"),
+            "list_gerakan_direncanakan": program_data_from_api.get("list_gerakan_direncanakan", []) # Include planned movements
+        }
+        patient_data_for_template = program_data_from_api.get('pasien', {})
+        # Ensure 'id' for patient_data_for_template, using 'id' from program_data_from_api['pasien'] or fallback
+        patient_data_for_template['id'] = patient_data_for_template.get('id', patient_id)
+
+
+        # Check if 'laporan_terkait' exists within the program data
+        if 'laporan_terkait' in program_data_from_api and isinstance(program_data_from_api['laporan_terkait'], dict):
+            report_data_for_template = program_data_from_api['laporan_terkait']
+            # If report is found here, it's considered successfully loaded. No flash message needed.
         else:
-            flash(f"Program dengan ID {program_id} tidak ditemukan.", "danger")
-            return redirect(url_for('patient_detail', patient_id=patient_id))
-    else: 
-        error_detail = "Error tidak diketahui dari server."
-        if isinstance(laporan_data_api, dict):
-            error_detail = laporan_data_api.get('error', laporan_data_api.get('msg', 'Error tidak diketahui dari server.'))
-        flash(f"Gagal mengambil detail laporan/program. Pesan: {str(error_detail)}", "danger")
+            # No 'laporan_terkait' found in program details, means report not submitted yet.
+            program_name_for_flash = program_info_for_header.get('nama_program', 'N/A')
+            flash(f"Laporan untuk program '{str(program_name_for_flash)}' belum disubmit oleh pasien.", "info")
+
+    else:
+        # Failed to get program details at all
+        error_detail = program_resp.get('error', program_resp.get('msg', 'Error tidak diketahui dari server (Program API).')) if isinstance(program_resp, dict) else "Respons API program tidak valid."
+        flash(f"Gagal mengambil detail program. Pesan: {str(error_detail)}", "danger")
         return redirect(url_for('patient_detail', patient_id=patient_id))
 
-    if not isinstance(patient_data_for_template, dict) or patient_data_for_template.get('id') != patient_id:
-        patient_summary_resp, _, _ = api_request('GET', f'/api/monitoring/summary/pasien/{patient_id}')
-        if isinstance(patient_summary_resp, dict) and 'pasien_info' in patient_summary_resp:
-             patient_data_for_template = patient_summary_resp['pasien_info']
-        else: 
-            patient_data_for_template = {"app_users.id": patient_id, "id": patient_id, "nama_lengkap": "Informasi Pasien Tidak Ditemukan"}
-    
+    # Ensure patient_data_for_template is consistent with patient_id if it wasn't properly set by program/report data
+    # This block can be simplified as the patient_data_for_template is already populated from program_resp['program']['pasien']
+    # And its 'id' is already ensured above.
     if 'nama_lengkap' not in patient_data_for_template and 'nama' in patient_data_for_template:
         patient_data_for_template['nama_lengkap'] = patient_data_for_template['nama']
 

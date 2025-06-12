@@ -65,7 +65,7 @@
             {% for patient in patients %}
             <div class="patient-card">
                 {# Menggunakan patient.foto_url (dari API) atau fallback #}
-                <img src="{{ patient.foto_url if patient.foto_url else url_for('static', filename='img/default_avatar.png') }}" 
+                <img src="{{ patient.foto_url if patient.foto_url else url_for('static', filename='img/default_avatar.jpg') }}" 
                     alt="Foto Pasien {{ patient.nama }}" 
                     class="patient-photo"
                     onerror="handleImageError(this)">

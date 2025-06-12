@@ -10,6 +10,21 @@
         body { font-family: 'Inter', sans-serif; background-color: #f7fafc; }
         .content-container { max-width: 1280px; margin: 2rem auto; padding: 1.5rem; background-color: white; border-radius: 0.75rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); }
         /* ... (style scrollbar bisa tetap) ... */
+        .table-th-report {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #4a5568;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .table-td-report {
+            padding: 0.75rem 1rem;
+            white-space: nowrap;
+            font-size: 0.875rem;
+            color: #4a5568;
+        }
     </style>
     <link rel="icon" href="{{ url_for('static', filename='img/logo.png') }}" type="image/png">
 
@@ -94,11 +109,24 @@
 
 {% block scripts_extra %}
 <script>
+    // Utility function to format ISO date string to a readable date
     function formatSimpleDate(isoDateString) {
         if (!isoDateString) return 'N/A';
         try {
             return new Date(isoDateString).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
         } catch (e) { return isoDateString; }
+    }
+
+    // Utility function to format seconds into MM:SS format
+    function formatTime(seconds) {
+        if (typeof seconds !== 'number' || isNaN(seconds) || seconds < 0) {
+            return 'N/A';
+        }
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        const formattedMinutes = String(minutes).padStart(2, '0');
+        const formattedSeconds = String(remainingSeconds).padStart(2, '0');
+        return `${formattedMinutes}:${formattedSeconds}`;
     }
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -108,14 +136,14 @@
         const loadingMessageEl = document.getElementById('loadingMessage');
         const mainContentEl = document.getElementById('reportMainContent');
 
-        let reportData = null;
-        let programHeaderData = null;
-        let patientHeaderData = null;
+        let reportData = null; // This will hold the 'laporan_terkait' data if present
+        let programData = null; // This will hold the 'program' data (from program_info_header_json)
+        let patientData = null; // This will hold the 'pasien' data (from patient_info_json)
 
         try {
             reportData = JSON.parse(reportDataElement.textContent);
-            programHeaderData = JSON.parse(programHeaderElement.textContent);
-            patientHeaderData = JSON.parse(patientHeaderElement.textContent);
+            programData = JSON.parse(programHeaderElement.textContent);
+            patientData = JSON.parse(patientHeaderElement.textContent);
         } catch (e) {
             console.error("Error parsing JSON data for report:", e);
             if(loadingMessageEl) loadingMessageEl.textContent = "Gagal memuat data laporan. Silakan coba lagi.";
@@ -123,45 +151,56 @@
         }
         
         if(loadingMessageEl) loadingMessageEl.style.display = 'none';
-        if(mainContentEl) mainContentEl.style.display = 'grid'; // Atau 'block' atau 'flex' sesuai layout
+        if(mainContentEl) mainContentEl.style.display = 'grid'; // Or 'block' or 'flex' depending on layout
 
         // Populate Header
-        document.getElementById('reportPatientName').textContent = patientHeaderData.nama_lengkap || 'N/A';
-        document.getElementById('reportPatientId').textContent = patientHeaderData.id_pasien_string || `ID: ${patientHeaderData.id || 'N/A'}`; // Changed from user_id to id
-        document.getElementById('reportProgramName').textContent = programHeaderData.nama_program || (reportData.program_info ? reportData.program_info.nama_program : 'N/A');
-        document.getElementById('reportProgramDateScheduled').textContent = formatSimpleDate(programHeaderData.tanggal_program || (reportData.program_info ? reportData.program_info.tanggal_program_direncanakan : null));
-        document.getElementById('reportSubmissionDate').textContent = reportData.tanggal_laporan_disubmit ? formatSimpleDate(reportData.tanggal_laporan_disubmit) : 'Belum Dilaporkan';
-        document.getElementById('reportTherapistName').textContent = programHeaderData.nama_terapis_program || (reportData.program_info ? reportData.program_info.nama_terapis_program : 'N/A');
+        document.getElementById('reportPatientName').textContent = patientData.nama_lengkap || 'N/A';
+        document.getElementById('reportPatientId').textContent = patientData.id_pasien_string || `ID: ${patientData.id || 'N/A'}`;
+        document.getElementById('reportProgramName').textContent = programData.nama_program || 'N/A';
+        document.getElementById('reportProgramDateScheduled').textContent = formatSimpleDate(programData.tanggal_program);
+        document.getElementById('reportTherapistName').textContent = programData.nama_terapis_program || 'N/A';
 
-
+        // Check if a report exists for this program
         if (reportData && Object.keys(reportData).length > 0 && reportData.laporan_id) {
+            document.getElementById('reportSubmissionDate').textContent = reportData.tanggal_laporan_disubmit ? formatSimpleDate(reportData.tanggal_laporan_disubmit) : 'Belum Dilaporkan';
+
             // Populate Detail Gerakan Hasil
             const tableBody = document.getElementById('reportMovementDetailsTableBody');
             tableBody.innerHTML = ''; 
-            const movementResults = reportData.detail_hasil_gerakan || [];
+            // Corrected: Use 'detail_hasil_gerakan_aktual' as per API response
+            const movementResults = reportData.detail_hasil_gerakan_aktual || []; 
+            
             if (movementResults.length === 0) {
                 tableBody.innerHTML = '<tr><td colspan="7" class="text-center p-4 italic">Tidak ada detail hasil gerakan untuk laporan ini.</td></tr>';
             } else {
-                movementResults.forEach((mov, index) => {
+                movementResults.forEach((mov_actual, index) => {
+                    // Find the planned repetitions for this movement from the programData
+                    const plannedMovement = programData.list_gerakan_direncanakan?.find(
+                        (mov_planned) => mov_planned.nama_gerakan === mov_actual.nama_gerakan
+                    );
+                    const plannedReps = plannedMovement ? plannedMovement.jumlah_repetisi_direncanakan : 'N/A';
+                    const movementDuration = mov_actual.waktu_aktual_per_gerakan_detik !== null ? formatTime(mov_actual.waktu_aktual_per_gerakan_detik) : 'N/A';
+
                     const row = `
                         <tr>
-                            <td class="table-td-report">${mov.urutan_dalam_program || (index + 1)}</td>
-                            <td class="table-td-report">${mov.nama_gerakan || 'N/A'}</td>
-                            <td class="table-td-report text-center">${mov.jumlah_repetisi_direncanakan || 'N/A'}</td>
-                            <td class="table-td-report text-center text-green-600 font-medium">${mov.jumlah_sempurna || 0}</td>
-                            <td class="table-td-report text-center text-orange-500 font-medium">${mov.jumlah_tidak_sempurna || 0}</td>
-                            <td class="table-td-report text-center text-gray-500 font-medium">${mov.jumlah_tidak_terdeteksi || 0}</td>
-                            <td class="table-td-report">${mov.waktu_aktual_per_gerakan_string || 'N/A'}</td>
+                            <td class="table-td-report">${index + 1}</td>
+                            <td class="table-td-report">${mov_actual.nama_gerakan || 'N/A'}</td>
+                            <td class="table-td-report text-center">${plannedReps}</td>
+                            <td class="table-td-report text-center text-green-600 font-medium">${mov_actual.jumlah_sempurna || 0}</td>
+                            <td class="table-td-report text-center text-orange-500 font-medium">${mov_actual.jumlah_tidak_sempurna || 0}</td>
+                            <td class="table-td-report text-center text-gray-500 font-medium">${mov_actual.jumlah_tidak_terdeteksi || 0}</td>
+                            <td class="table-td-report">${movementDuration}</td>
                         </tr>`;
                     tableBody.innerHTML += row;
                 });
             }
 
             // Populate Summary
-            document.getElementById('reportTotalRehabTime').textContent = reportData.total_waktu_rehabilitasi_string || "00:00";
+            document.getElementById('reportTotalRehabTime').textContent = reportData.total_waktu_rehabilitasi_string || (reportData.total_waktu_rehabilitasi_detik !== null ? formatTime(reportData.total_waktu_rehabilitasi_detik) : "00:00");
             document.getElementById('reportPatientNotes').textContent = reportData.catatan_pasien_laporan || "Tidak ada catatan dari pasien.";
             
-            const summaryTotals = reportData.summary_total_hitungan || {sempurna:0, tidak_sempurna:0, tidak_terdeteksi:0};
+            // Corrected: Use 'summary_total_hitungan_aktual' as per API response
+            const summaryTotals = reportData.summary_total_hitungan_aktual || {sempurna:0, tidak_sempurna:0, tidak_terdeteksi:0};
             document.getElementById('reportTotalPerfect').textContent = summaryTotals.sempurna;
             document.getElementById('reportTotalImperfect').textContent = summaryTotals.tidak_sempurna;
             document.getElementById('reportTotalUndetected').textContent = summaryTotals.tidak_terdeteksi;
@@ -181,12 +220,16 @@
                     },
                     options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom'}}}
                 });
+            } else {
+                console.error("Canvas element 'reportOverallAnalysisChart' not found.");
             }
 
         } else {
-            // Tampilkan pesan bahwa laporan belum ada atau tidak valid
+            // Display message if no report data is available
+            document.getElementById('reportSubmissionDate').textContent = 'Belum Dilaporkan';
             document.getElementById('reportMovementDetailsTableBody').innerHTML = '<tr><td colspan="7" class="text-center p-4 italic">Laporan untuk program ini belum tersedia atau data tidak lengkap.</td></tr>';
             document.getElementById('reportTotalRehabTime').textContent = "N/A";
+            document.getElementById('reportPatientNotes').textContent = "Tidak ada catatan dari pasien.";
             document.getElementById('reportTotalPerfect').textContent = "N/A";
             document.getElementById('reportTotalImperfect').textContent = "N/A";
             document.getElementById('reportTotalUndetected').textContent = "N/A";

@@ -1,345 +1,744 @@
+{# patient_detail.html #}
 {% extends "base.html" %}
 
-{% block title %}Detail Pasien - {{ patient.nama_lengkap if patient else 'N/A' }}{% endblock %}
+{% block title %}Detail Pasien{% endblock %}
 
 {% block head_extra %}
-<script src="https://cdn.tailwindcss.com"></script> {# Jika belum ada di base.html #}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="icon" href="{{ url_for('static', filename='img/logo.png') }}" type="image/png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="{{ url_for('static', filename='img/logo.png') }}" type="image/png">
+    
+    <script id="patientIdPayload" type="application/json">{{ patient.id | tojson | safe }}</script>
+    {# Pass additional data needed for JavaScript #}
+    <script id="monitoringDataPayload" type="application/json">{{ monitoring_data_js | default('{}') | safe }}</script>
+    <script id="patientRehabHistoryPayload" type="application/json">{{ patient_rehab_history | tojson | safe }}</script> 
+    <script id="patientMealPlansPayload" type="application/json">{{ patient_meal_plans_json | default('[]') | safe }}</script> {# New payload for meal plans #}
 
-<style>
-    /* Styling untuk tab aktif bisa ditambahkan di sini atau di style.css */
-    .tablinks.active {
-        border-color: #28a745; /* blue-600 */
-        color: #28a745;
-    }
-    .tabcontent { display: none; }
 
-    /* Styling untuk pesan info jika tidak ada data */
-    .info-message {
-        padding: 1.5rem;
-        background-color: #f0f9ff; /* blue-50 */
-        border: 1px solid #bfdbfe; /* blue-200 */
-        border-radius: 0.5rem;
-        color: #28a745; /* blue-600 */
-        text-align: center;
-        font-weight: 500;
-        margin-top: 1.5rem;
-    }
-</style>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7fafc;
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 2rem auto;
+            padding: 1.5rem;
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        .header-section {
+            display: flex;
+            align-items: center;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 1.5rem;
+        }
+
+        .profile-picture {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 1.5rem;
+            border: 2px solid #3b82f6;
+        }
+
+        .patient-info h1 {
+            font-size: 1.875rem;
+            font-weight: 700;
+            color: #1a202c;
+            margin-bottom: 0.25rem;
+        }
+
+        .patient-info p {
+            font-size: 0.875rem;
+            color: #718096;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .kpi-card {
+            background-color: #fff;
+            padding: 1.25rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            text-align: center;
+        }
+
+        .kpi-card .value {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: #3b82f6;
+            margin-bottom: 0.25rem;
+        }
+
+        .kpi-card .label {
+            font-size: 0.875rem;
+            color: #718096;
+        }
+
+        .chart-section {
+            background-color: #fff;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            margin-bottom: 2rem;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e2e8f0;
+            margin-bottom: 1.5rem;
+        }
+
+        .tab-button {
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            color: #718096;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .tab-button.active {
+            color: #3b82f6;
+            border-color: #3b82f6;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .activity-card {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .activity-card .date {
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        .activity-card .name {
+            color: #2d3748;
+        }
+
+        .activity-card .status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: capitalize;
+        }
+
+        .status-belum_dimulai {
+            background-color: #fee2e2;
+            color: #ef4444;
+        }
+
+        .status-berlangsung {
+            background-color: #fef3c7;
+            color: #f59e0b;
+        }
+
+        .status-selesai {
+            background-color: #d1fae5;
+            color: #10b981;
+        }
+        
+        .status-menunggu_laporan {
+            background-color: #bfdbfe;
+            color: #2563eb;
+        }
+
+        .button-add {
+            background-color: #3b82f6;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            transition: background-color 0.3s ease;
+        }
+
+        .button-add:hover {
+            background-color: #2563eb;
+        }
+
+        .program-table th,
+        .program-table td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .program-table th {
+            background-color: #f8fafc;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #4a5568;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .program-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* New styles for observation cards */
+        .observation-card {
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-left: 4px solid #3b82f6; /* Blue left border for emphasis */
+            border-radius: 0.5rem;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+        }
+        .observation-card .note-content {
+            font-size: 0.95rem;
+            color: #2d3748;
+            margin-bottom: 0.5rem;
+            line-height: 1.5;
+        }
+        .observation-card .note-meta {
+            font-size: 0.75rem;
+            color: #718096;
+            text-align: right;
+        }
+
+        /* Styles for Meal Plan section */
+        .meal-plan-form label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        .meal-plan-form input[type="date"],
+        .meal-plan-form textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #cbd5e0;
+            border-radius: 0.375rem;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+
+        .meal-plan-form button {
+            background-color: #10b981; /* Green color for meal plan button */
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .meal-plan-form button:hover {
+            background-color: #059669;
+        }
+
+        .meal-plan-card {
+            background-color: #e0f2fe; /* Light blue background */
+            border: 1px solid #93c5fd;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .meal-plan-card h3 {
+            font-weight: 600;
+            color: #1e40af; /* Darker blue for date */
+            margin-bottom: 0.5rem;
+        }
+
+        .meal-plan-card p {
+            font-size: 0.9rem;
+            color: #334155;
+            margin-bottom: 0.25rem;
+        }
+    </style>
 {% endblock %}
 
 {% block content %}
-    <div class="max-w-6xl mx-auto my-8 p-4 sm:p-6 lg:p-8 bg-white rounded-xl shadow-2xl">
-        <!-- Informasi Header Pasien -->
-        <div class="flex flex-col sm:flex-row items-start gap-6 pb-6 mb-6 border-b border-gray-200">
-            <img src="{{ patient.url_foto_profil if patient and patient.url_foto_profil else url_for('static', filename='img/default_avatar.png') }}"
-                alt="Foto Pasien {{ patient.nama_lengkap if patient else 'Pasien' }}"
-                class="w-32 h-32 rounded-lg object-cover border-2 border-gray-200 shadow-md flex-shrink-0"
-                onerror="handleImageError(this)">
-            
-            <div class="flex-grow">
-                <h1 class="text-3xl lg:text-4xl font-bold text-gray-800 mb-2">{{ patient.nama_lengkap | default('Nama Pasien Tidak Tersedia') }}</h1>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-600">
-                    <p><strong>ID Pasien:</strong> {{ patient.id_pasien_string | default(patient.user_id | default('N/A')) }}</p>
-                    <p><strong>Tanggal Lahir:</strong> {{ patient.tanggal_lahir | format_date_id if patient.tanggal_lahir else 'N/A' }}</p>
-                    <p><strong>Jenis Kelamin:</strong> {{ patient.jenis_kelamin | default('N/A') }}</p>
-                    <p><strong>Diagnosis:</strong> <span class="font-medium text-gray-700">{{ patient.diagnosis | default('N/A') }}</span></p>
-                </div>
-                <p class="mt-2 text-sm text-gray-600"><strong>Catatan Tambahan:</strong> {{ patient.catatan_tambahan_pasien | default('-') }}</p>
-            </div>
+<div class="container">
+    <header class="header-section">
+        <img src="{{ patient.foto_src_display }}" alt="Foto Profil Pasien" class="profile-picture">
+        <div class="patient-info">
+            <h1>{{ patient.nama_lengkap | default('Nama Pasien') }}</h1>
+            <p>ID: {{ patient.id_pasien_string | default('N/A') }}</p>
+            <p>Jenis Kelamin: {{ patient.jenis_kelamin | default('N/A') }}</p>
+            <p>Tanggal Lahir: {{ patient.tanggal_lahir | format_date_id if patient.tanggal_lahir else 'N/A' }}</p>
+            <p>Diagnosis: {{ patient.diagnosis | default('Belum ada diagnosis') }}</p>
         </div>
-
-        <!-- Navigasi Tab -->
-        <div class="mb-6 border-b-2 border-gray-200">
-            <nav class="flex -mb-px space-x-4 sm:space-x-6 md:space-x-8" aria-label="Tabs">
-                <button class="tablinks whitespace-nowrap py-3 px-2 sm:px-4 border-b-2 font-semibold text-sm text-gray-500 hover:text-blue-600 hover:border-blue-600 focus:outline-none" onclick="openTab(event, 'Monitoring')" id="defaultOpen">
-                    Monitoring Perkembangan
-                </button>
-                <button class="tablinks whitespace-nowrap py-3 px-2 sm:px-4 border-b-2 font-semibold text-sm text-gray-500 hover:text-blue-600 hover:border-blue-600 focus:outline-none" onclick="openTab(event, 'ProgramRehab')">
-                    Program Rehabilitasi
-                </button>
-            </nav>
+        <div class="ml-auto">
+            <a href="{{ url_for('add_activity', patient_id=patient.id) }}" class="button-add">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 mr-2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                Tambah Aktivitas
+            </a>
         </div>
+    </header>
 
-        <!-- Konten Tab: Monitoring Perkembangan -->
-        <div id="Monitoring" class="tabcontent space-y-8">
-            <h2 class="text-2xl md:text-3xl font-bold text-gray-800">Ringkasan & Tren Rehabilitasi</h2>
-            <!-- KPI Cards -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                <div class="p-5 rounded-lg shadow-lg flex flex-col items-center justify-center text-white text-center transition-transform transform hover:scale-105 bg-gradient-to-br from-blue-500 to-blue-700">
-                    <p class="text-sm font-light opacity-90 mb-1">Total Sesi Selesai</p> <p id="totalSessionsCompleted" class="text-3xl font-bold">0</p>
-                </div>
-                <div class="p-5 rounded-lg shadow-lg flex flex-col items-center justify-center text-white text-center transition-transform transform hover:scale-105 bg-gradient-to-br from-green-500 to-green-700">
-                    <p class="text-sm font-light opacity-90 mb-1">Rata-rata Akurasi</p> <p id="averageAccuracy" class="text-3xl font-bold">0%</p>
-                </div>
-                <div class="p-5 rounded-lg shadow-lg flex flex-col items-center justify-center text-gray-800 text-center transition-transform transform hover:scale-105 bg-gradient-to-br from-yellow-400 to-yellow-600">
-                    <p class="text-sm font-light opacity-90 mb-1">Rata-rata Durasi Sesi</p> <p id="averageSessionDuration" class="text-3xl font-bold">0m 0s</p>
-                </div>
-                <div class="p-5 rounded-lg shadow-lg flex flex-col items-center justify-center text-white text-center transition-transform transform hover:scale-105 bg-gradient-to-br from-purple-500 to-purple-700">
-                    <p class="text-sm font-light opacity-90 mb-1">Frekuensi Latihan</p> <p id="trainingFrequency" class="text-3xl font-bold">0x</p>
-                </div>
-            </div>
-            <!-- Grafik Tren -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div class="bg-white rounded-xl shadow-lg p-6"><h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-3 border-gray-200">Tren Akurasi (7 Sesi Terakhir)</h3><div class="relative h-60 md:h-72"><canvas id="accuracyTrendChart"></canvas></div></div>
-                <div class="bg-white rounded-xl shadow-lg p-6"><h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-3 border-gray-200">Tren Durasi Sesi (Menit, 7 Sesi Terakhir)</h3><div class="relative h-60 md:h-72"><canvas id="durationTrendChart"></canvas></div></div>
-            </div>
-            <!-- Distribusi Hasil & Catatan -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="lg:col-span-1 bg-white rounded-xl shadow-lg p-6"><h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-3 border-gray-200">Distribusi Hasil Gerakan (Total)</h3><div class="relative h-60 md:h-72"><canvas id="overallMovementResultChart"></canvas></div></div>
-                <div class="lg:col-span-2 bg-white rounded-xl shadow-lg p-6"><h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-3 border-gray-200">Catatan & Observasi Terbaru</h3><ul id="latestNotesList" class="space-y-3"><li class="italic text-gray-400">Memuat catatan...</li></ul></div>
-            </div>
-            <!-- Riwayat Aktivitas Monitoring -->
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-3 border-gray-200">Riwayat Program Selesai</h3>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200" id="monitoringHistoryTable">
-                        <thead class="bg-gray-50"><tr>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Tanggal Program</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nama Program</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Catatan Pasien</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Aksi</th>
-                        </tr></thead>
-                        <tbody class="bg-white divide-y divide-gray-200" id="monitoringHistoryTableBody"></tbody>
-                    </table>
-                    <p id="noMonitoringHistory" class="italic text-gray-400 p-4">Belum ada riwayat program yang selesai.</p>
-                </div>
-            </div>
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="value" id="totalSesiSelesai">0</div>
+            <div class="label">Total Sesi Selesai</div>
         </div>
+        <div class="kpi-card">
+            <div class="value" id="rataRataAkurasi">0%</div>
+            <div class="label">Rata-rata Akurasi</div>
+        </div>
+        <div class="kpi-card">
+            <div class="value" id="rataRataDurasi">0m 0s</div>
+            <div class="label">Rata-rata Durasi Sesi</div>
+        </div>
+        <div class="kpi-card">
+            <div class="value" id="frekuensiLatihan">0</div>
+            <div class="label">Frekuensi Latihan/Minggu</div>
+        </div>
+    </div>
 
-        <!-- Konten Tab: Program Rehabilitasi -->
-        <div id="ProgramRehab" class="tabcontent">
-             <div class="p-0 sm:p-4 md:p-6">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-                    <div>
-                        <h2 class="text-2xl font-semibold text-gray-800">Program Rehabilitasi Pasien</h2>
-                        <p class="text-gray-600 mt-1">Buat dan kelola program kegiatan rehabilitasi untuk pasien ini.</p>
-                    </div>
-                    <a href="{{ url_for('add_activity', patient_id=patient.user_id if patient else '#') }}" class="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-base font-medium rounded-md shadow-sm transition-all duration-200 ease-in-out text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 mt-4 sm:mt-0">+ Buat Program Baru</a>
-                </div>
-                
-                <h3 class="text-xl font-semibold text-gray-700 mb-4">Riwayat Program Rehabilitasi Pasien</h3>
-                {% if patient_rehab_history %}
-                    <div class="overflow-x-auto bg-white rounded-lg shadow-md">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50"><tr>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nama Program</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Tanggal Pelaksanaan</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Aksi</th>
-                            </tr></thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
-                                {% for program in patient_rehab_history %}
-                                <tr>
-                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700 font-medium text-gray-900">{{ program.nama_program | default('N/A') }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700">{{ program.tanggal_program | format_date_id if program.tanggal_program else 'N/A' }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                                        {% set status_val = program.status | lower if program.status else '' %}
-                                        {% set status_class = 'bg-gray-100 text-gray-800' %}
-                                        {% if status_val == 'selesai' %}{% set status_class = 'bg-green-100 text-green-800' %}
-                                        {% elif status_val == 'berjalan' %}{% set status_class = 'bg-yellow-100 text-yellow-800' %}
-                                        {% elif status_val == 'belum_dimulai' %}{% set status_class = 'bg-blue-100 text-blue-800' %}
-                                        {% elif status_val == 'dibatalkan' %}{% set status_class = 'bg-red-100 text-red-700' %}
-                                        {% endif %}
-                                        <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold {{ status_class }}">{{ program.status | upper | replace("_", " ") if program.status else 'N/A' }}</span>
-                                    </td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                                        <a href="{{ url_for('program_report_detail', patient_id=patient.user_id if patient else 0, program_id=program.id) }}" class="text-blue-600 hover:text-blue-800 font-medium hover:underline">
-                                            {{ 'Lihat Laporan' if program.status and program.status == 'selesai' else 'Lihat Detail Program' }}
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <div class="info-message">Belum ada riwayat program rehabilitasi untuk pasien ini.</div>
-                {% endif %}
+    <div class="chart-section">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Tren Akurasi & Durasi Sesi</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+                <h3 class="text-lg font-medium text-gray-600 mb-2">Akurasi 7 Sesi Terakhir</h3>
+                <div class="h-64"><canvas id="accuracyChart"></canvas></div>
+            </div>
+            <div>
+                <h3 class="text-lg font-medium text-gray-600 mb-2">Durasi 7 Sesi Terakhir</h3>
+                <div class="h-64"><canvas id="durationChart"></canvas></div>
             </div>
         </div>
     </div>
 
-    {# Menyimpan data dari Flask/Jinja untuk diakses oleh JavaScript #}
-    <script id="monitoringDataPayload" type="application/json">
-        {{ monitoring_data_js | default('{}') | safe }}
-    </script>
+    <div class="chart-section">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Distribusi Hasil Gerakan Total</h2>
+        <div class="w-full h-72 flex justify-center items-center">
+            <canvas id="movementDistributionChart" class="max-h-full max-w-full"></canvas>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-button active" onclick="openTab(event, 'programHistory')">Riwayat Program</button>
+        <button class="tab-button" onclick="openTab(event, 'latestObservations')">Catatan & Observasi Terbaru</button>
+        <button class="tab-button" onclick="openTab(event, 'mealPlan')">Pola Makan</button> {# New tab button #}
+    </div>
+
+    <div id="programHistory" class="tab-content active">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Riwayat Program Selesai</h2>
+        <div class="overflow-x-auto bg-white rounded-lg shadow">
+            <table class="min-w-full divide-y divide-gray-200 program-table">
+                <thead>
+                    <tr>
+                        <th>Tanggal Program</th>
+                        <th>Nama Program</th>
+                        <th>Catatan Pasien</th>
+                        <th>Status Program</th> {# New column header #}
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody id="programHistoryTableBody">
+                    {# Data akan diisi oleh JavaScript #}
+                    <tr><td colspan="5" class="text-center py-4 text-gray-500 italic">Memuat riwayat program...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="latestObservations" class="tab-content">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Catatan & Observasi Terbaru</h2>
+        <div id="observationNotesContainer">
+            {# Data akan diisi oleh JavaScript #}
+            <p class="text-center py-4 text-gray-500 italic">Memuat catatan observasi...</p>
+        </div>
+    </div>
+
+    {# New Tab Content for Meal Plan #}
+    <div id="mealPlan" class="tab-content">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Atur Pola Makan Pasien</h2>
+        <div class="bg-white p-6 rounded-lg shadow mb-6">
+            <form id="mealPlanForm" class="meal-plan-form">
+                <div class="mb-4">
+                    <label for="mealDate">Tanggal:</label>
+                    <input type="date" id="mealDate" name="mealDate" required>
+                </div>
+                <div class="mb-4">
+                    <label for="breakfastMenu">Menu Makan Pagi:</label>
+                    <textarea id="breakfastMenu" name="breakfastMenu" rows="3" placeholder="Contoh: Nasi, Telur dadar, Sayur bayam"></textarea>
+                </div>
+                <div class="mb-4">
+                    <label for="lunchMenu">Menu Makan Siang:</label>
+                    <textarea id="lunchMenu" name="lunchMenu" rows="3" placeholder="Contoh: Ayam panggang, Nasi merah, Tumis buncis"></textarea>
+                </div>
+                <div class="mb-4">
+                    <label for="dinnerMenu">Menu Makan Malam:</label>
+                    <textarea id="dinnerMenu" name="dinnerMenu" rows="3" placeholder="Contoh: Ikan kukus, Kentang rebus, Salad"></textarea>
+                </div>
+                <div class="mb-4">
+                    <label for="snacksMenu">Cemilan (Opsional):</label>
+                    <textarea id="snacksMenu" name="snacksMenu" rows="3" placeholder="Contoh: Buah apel, Yoghurt"></textarea>
+                </div>
+                <button type="submit">Simpan Pola Makan</button>
+            </form>
+        </div>
+
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Riwayat Pola Makan</h2>
+        <div id="mealPlanHistoryContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {# Meal plan history will be populated here by JavaScript #}
+            <p class="col-span-full text-center py-4 text-gray-500 italic">Belum ada pola makan yang diatur.</p>
+        </div>
+    </div>
+</div>
+
+{# Payload for JavaScript #}
+<script id="monitoringDataPayload" type="application/json">{{ monitoring_data_js | default('{}') | safe }}</script>
+<script id="patientRehabHistoryPayload" type="application/json">{{ patient_rehab_history | tojson | safe }}</script> 
+<script id="patientMealPlansPayload" type="application/json">{{ patient_meal_plans_json | default('[]') | safe }}</script> {# New payload for meal plans #}
+
 {% endblock %}
 
 {% block scripts_extra %}
 <script>
-    // Fungsi untuk menangani error gambar dan mengganti dengan fallback
-    function handleImageError(imageElement) {
-        // Implementasi Anda untuk handleImageError tetap sama
-        const fallbackUrl = "{{ url_for('static', filename='img/default_avatar.png') }}";
-        imageElement.src = fallbackUrl;
-        imageElement.onerror = null;
-    }
-
-    // Fungsi untuk membuka tab
     function openTab(evt, tabName) {
         var i, tabcontent, tablinks;
-        tabcontent = document.getElementsByClassName("tabcontent");
+        tabcontent = document.getElementsByClassName("tab-content");
         for (i = 0; i < tabcontent.length; i++) {
             tabcontent[i].style.display = "none";
         }
-        tablinks = document.getElementsByClassName("tablinks");
+        tablinks = document.getElementsByClassName("tab-button");
         for (i = 0; i < tablinks.length; i++) {
-            tablinks[i].classList.remove("active", "text-blue-600", "border-blue-600");
-            tablinks[i].classList.add("text-gray-500", "border-transparent");
+            tablinks[i].className = tablinks[i].className.replace(" active", "");
         }
-        const currentTab = document.getElementById(tabName);
-        if(currentTab) currentTab.style.display = "block";
-        
-        const clickedButton = evt ? evt.currentTarget : document.getElementById("defaultOpen");
-        if(clickedButton) {
-            clickedButton.classList.add("active", "text-blue-600", "border-blue-600");
-            clickedButton.classList.remove("text-gray-500", "border-transparent");
-        }
+        document.getElementById(tabName).style.display = "block";
+        evt.currentTarget.className += " active";
+    }
 
-        if (tabName === 'Monitoring') {
-            initializeMonitoringDashboard();
+    // Utility function to format ISO date string to a readable date
+    function formatSimpleDate(isoDateString) {
+        if (!isoDateString) return 'N/A';
+        try {
+            // Ensure the date is parsed correctly, especially if it's just 'YYYY-MM-DD'
+            const date = new Date(isoDateString + 'T00:00:00'); // Add time to avoid timezone issues for simple dates
+            return date.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+        } catch (e) {
+            console.error("Error formatting date:", e);
+            return isoDateString;
         }
     }
 
-    let accuracyChartInstance = null;
-    let durationChartInstance = null;
-    let movementResultChartInstance = null;
+    // Utility function to format seconds into MMm SSs format
+    function formatDuration(seconds) {
+        if (typeof seconds !== 'number' || isNaN(seconds) || seconds < 0) {
+            return 'N/A';
+        }
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        return `${minutes}m ${remainingSeconds}s`;
+    }
 
-    function initializeMonitoringDashboard() {
+    document.addEventListener('DOMContentLoaded', function() {
         const monitoringDataElement = document.getElementById('monitoringDataPayload');
-        let monitoringData = {};
+        const patientRehabHistoryElement = document.getElementById('patientRehabHistoryPayload');
+        const patientMealPlansElement = document.getElementById('patientMealPlansPayload'); // Get meal plans element
+
+        let monitoringData = null;
+        let patientRehabHistory = [];
+        let patientMealPlans = []; // Initialize meal plans array
+        
+        // Get patient_id from the `patient` object which is passed from Flask
+        const currentPatientId = JSON.parse(document.getElementById('patientIdPayload').textContent);
+
         try {
             monitoringData = JSON.parse(monitoringDataElement.textContent);
+            patientRehabHistory = JSON.parse(patientRehabHistoryElement.textContent); 
+            patientMealPlans = JSON.parse(patientMealPlansElement.textContent); // Parse meal plans
         } catch (e) {
-            console.error("Gagal parsing data monitoring JSON:", e);
-            // Tampilkan pesan error atau kondisi kosong di UI
-            document.getElementById('totalSessionsCompleted').textContent = 'N/A';
-            // ... dan seterusnya untuk KPI lain dan grafik
+            console.error("Error parsing JSON data:", e);
+            document.getElementById('totalSesiSelesai').textContent = 'Error';
+            document.getElementById('rataRataAkurasi').textContent = 'Error';
+            document.getElementById('rataRataDurasi').textContent = 'Error';
+            document.getElementById('frekuensiLatihan').textContent = 'Error';
+            document.getElementById('programHistoryTableBody').innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">Gagal memuat data.</td></tr>'; // Updated colspan
+            document.getElementById('observationNotesContainer').innerHTML = '<p class="text-center py-4 text-red-500">Gagal memuat catatan.</p>';
+            document.getElementById('mealPlanHistoryContainer').innerHTML = '<p class="text-center py-4 text-red-500">Gagal memuat pola makan.</p>'; // New error message
             return;
         }
 
-        if (!monitoringData || Object.keys(monitoringData).length === 0) {
-            console.warn("Data monitoring tidak tersedia dari Flask/API.");
-            // Tampilkan pesan error atau kondisi kosong di UI jika diperlukan
-            return;
+        // --- Populate KPI Cards ---
+        if (monitoringData && monitoringData.summary_kpi) {
+            const kpi = monitoringData.summary_kpi;
+            document.getElementById('totalSesiSelesai').textContent = kpi.total_sesi_selesai !== undefined ? kpi.total_sesi_selesai : 'N/A';
+            document.getElementById('rataRataAkurasi').textContent = kpi.rata_rata_akurasi_persen !== undefined ? `${kpi.rata_rata_akurasi_persen}%` : 'N/A';
+            document.getElementById('rataRataDurasi').textContent = kpi.rata_rata_durasi_string || 'N/A';
+            document.getElementById('frekuensiLatihan').textContent = kpi.frekuensi_latihan_per_minggu !== undefined ? kpi.frekuensi_latihan_per_minggu : 'N/A';
+        } else {
+            console.warn("KPI data not available or invalid.");
+            document.getElementById('totalSesiSelesai').textContent = 'N/A';
+            document.getElementById('rataRataAkurasi').textContent = 'N/A';
+            document.getElementById('rataRataDurasi').textContent = 'N/A';
+            document.getElementById('frekuensiLatihan').textContent = 'N/A';
         }
 
-        const summaryKpi = monitoringData.summary_kpi || {};
-        const trendsChartData = monitoringData.trends_chart || {};
-        const accuracyTrend = trendsChartData.akurasi_7_sesi_terakhir || { labels: [], data: [] };
-        const durationTrend = trendsChartData.durasi_7_sesi_terakhir || { labels: [], data: [] };
-        const overallResults = monitoringData.distribusi_hasil_gerakan_total || { labels: [], data: [0,0,0] };
-        const latestNotesData = monitoringData.catatan_observasi_terbaru || [];
-        const monitoringHistoryData = monitoringData.riwayat_aktivitas_monitoring || [];
+        // --- Populate Trends Charts ---
+        if (monitoringData && monitoringData.trends_chart) {
+            const trends = monitoringData.trends_chart;
 
-        // Populate KPI Cards
-        document.getElementById('totalSessionsCompleted').textContent = summaryKpi.total_sesi_selesai !== undefined ? summaryKpi.total_sesi_selesai : '0';
-        document.getElementById('averageAccuracy').textContent = `${summaryKpi.rata_rata_akurasi_persen !== undefined ? Math.round(summaryKpi.rata_rata_akurasi_persen) : '0'}%`;
-        document.getElementById('averageSessionDuration').textContent = summaryKpi.rata_rata_durasi_string || '0m 0s';
-        document.getElementById('trainingFrequency').textContent = `${summaryKpi.frekuensi_latihan_per_minggu !== undefined ? summaryKpi.frekuensi_latihan_per_minggu : '0'}x`;
-
-        // Render Grafik Tren Akurasi
-        const accuracyCtx = document.getElementById('accuracyTrendChart');
-        if (accuracyCtx) {
-            if (accuracyChartInstance) accuracyChartInstance.destroy();
-            accuracyChartInstance = new Chart(accuracyCtx.getContext('2d'), {
+            // Accuracy Chart
+            const accuracyCtx = document.getElementById('accuracyChart').getContext('2d');
+            new Chart(accuracyCtx, {
                 type: 'line',
                 data: {
-                    labels: accuracyTrend.labels,
-                    datasets: [{ label: 'Akurasi (%)', data: accuracyTrend.data, borderColor: 'rgba(59, 130, 246, 1)', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: 'rgba(59, 130, 246, 1)'}]
-                }, 
-                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false, suggestedMax:100, ticks: { stepSize: 20 } } } }
-            });
-        }
-
-        // Render Grafik Tren Durasi
-        const durationCtx = document.getElementById('durationTrendChart');
-        if (durationCtx) {
-            if (durationChartInstance) durationChartInstance.destroy();
-            durationChartInstance = new Chart(durationCtx.getContext('2d'), {
-                type: 'line',
-                data: {
-                    labels: durationTrend.labels,
-                    datasets: [{ label: 'Durasi (menit)', data: durationTrend.data, borderColor: 'rgba(234, 179, 8, 1)', backgroundColor: 'rgba(234, 179, 8, 0.1)', fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: 'rgba(234, 179, 8, 1)'}]
-                },
-                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
-            });
-        }
-        
-        // Render Grafik Distribusi Hasil Gerakan
-        const movementResultCtx = document.getElementById('overallMovementResultChart');
-        if (movementResultCtx) {
-            if (movementResultChartInstance) movementResultChartInstance.destroy();
-            movementResultChartInstance = new Chart(movementResultCtx.getContext('2d'), {
-                type: 'doughnut',
-                data: {
-                    labels: overallResults.labels || ['Sempurna', 'Tidak Sempurna', 'Tidak Terdeteksi'],
+                    labels: trends.akurasi_7_sesi_terakhir.labels,
                     datasets: [{
-                        data: overallResults.data || [0,0,0],
-                        backgroundColor: ['rgba(16, 185, 129, 0.9)', 'rgba(249, 115, 22, 0.9)', 'rgba(156, 163, 175, 0.9)'],
-                        borderColor: ['#ffffff'], borderWidth: 2, hoverOffset: 8
+                        label: 'Akurasi (%)',
+                        data: trends.akurasi_7_sesi_terakhir.data,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        fill: true,
+                        tension: 0.3
                     }]
                 },
-                options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom', labels:{ padding:12, boxWidth:12, font: { size: 12 } } } } }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Akurasi (%)' }, max: 100 },
+                        x: { title: { display: true, text: 'Sesi' } }
+                    },
+                    plugins: { legend: { display: true } }
+                }
             });
-        }
 
-        // Populate Catatan Terbaru
-        const notesListEl = document.getElementById('latestNotesList');
-        if (notesListEl) {
-            notesListEl.innerHTML = ''; 
-            if (latestNotesData.length > 0) {
-                latestNotesData.forEach(item => {
-                    const listItem = document.createElement('li');
-                    listItem.className = 'p-3 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-sm transition-shadow';
-                    listItem.innerHTML = `<p class="font-medium text-gray-800">${item.catatan || 'Tidak ada catatan.'}</p>
-                                          <p class="text-xs text-gray-500 mt-1.5">Oleh: <span class="font-semibold">${item.sumber || 'N/A'}</span> - ${new Date(item.tanggal).toLocaleDateString('id-ID', {day:'2-digit', month:'long', year:'numeric'}) || 'N/A'}</p>`;
-                    notesListEl.appendChild(listItem);
-                });
-            } else {
-                notesListEl.innerHTML = '<li class="italic text-gray-500 p-3">Belum ada catatan terbaru.</li>';
-            }
-        }
-        
-        // Populate Riwayat Aktivitas Monitoring (Program Selesai)
-        const monitoringTableBodyEl = document.getElementById('monitoringHistoryTableBody');
-        const noMonitoringHistoryMsgEl = document.getElementById('noMonitoringHistory');
-        if (monitoringTableBodyEl) {
-            monitoringTableBodyEl.innerHTML = ''; 
-            if (monitoringHistoryData.length > 0) {
-                if(noMonitoringHistoryMsgEl) noMonitoringHistoryMsgEl.classList.add('hidden');
-                monitoringHistoryData.forEach(item => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700">${item.tanggal_program ? new Date(item.tanggal_program).toLocaleDateString('id-ID', {day:'2-digit', month:'long', year:'numeric'}) : 'N/A'}</td>
-                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700">${item.nama_program || 'N/A'}</td>
-                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700">${item.keterangan_sesi || '-'}</td>
-                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                            <a href="/program-report/${patient.user_id || 0}/${item.laporan_id ? item.laporan_id : (item.program_asli_id_jika_ada || 0)}" class="text-blue-600 hover:text-blue-800 font-medium">Lihat Laporan</a>
-                        </td> 
-                    `; // URL untuk Lihat Laporan perlu ID program asli jika laporan ID tidak ada
-                    monitoringTableBodyEl.appendChild(row);
-                });
-            } else {
-                if(noMonitoringHistoryMsgEl) noMonitoringHistoryMsgEl.classList.remove('hidden');
-            }
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        const defaultOpenButton = document.getElementById("defaultOpen");
-        if (defaultOpenButton) {
-            openTab(null, 'Monitoring'); // Buka tab Monitoring secara default
+            // Duration Chart
+            const durationCtx = document.getElementById('durationChart').getContext('2d');
+            new Chart(durationCtx, {
+                type: 'line',
+                data: {
+                    labels: trends.durasi_7_sesi_terakhir.labels,
+                    datasets: [{
+                        label: 'Durasi (menit)',
+                        data: trends.durasi_7_sesi_terakhir.data,
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Durasi (menit)' } },
+                        x: { title: { display: true, text: 'Sesi' } }
+                    },
+                    plugins: { legend: { display: true } }
+                }
+            });
         } else {
-            // Jika tidak ada defaultOpen, coba buka tab pertama jika ada
-            const firstTabButton = document.querySelector(".tablinks");
-            if (firstTabButton) {
-                openTab(null, firstTabButton.id === 'defaultOpen' ? 'Monitoring' : 'ProgramRehab');
+            console.warn("Trends chart data not available or invalid.");
+            document.getElementById('accuracyChart').parentElement.innerHTML = "<p class='text-center italic text-gray-500'>Data grafik akurasi tidak tersedia.</p>";
+            document.getElementById('durationChart').parentElement.innerHTML = "<p class='text-center italic text-gray-500'>Data grafik durasi tidak tersedia.</p>";
+        }
+
+        // --- Populate Movement Distribution Chart ---
+        if (monitoringData && monitoringData.distribusi_hasil_gerakan_total) {
+            const distribution = monitoringData.distribusi_hasil_gerakan_total;
+            const movementDistributionCtx = document.getElementById('movementDistributionChart').getContext('2d');
+            new Chart(movementDistributionCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: distribution.labels,
+                    datasets: [{
+                        data: distribution.data,
+                        backgroundColor: ['#10b981', '#f59e0b', '#6b7280'], // Green, Orange, Gray
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        }
+                    }
+                }
+            });
+        } else {
+            console.warn("Movement distribution chart data not available or invalid.");
+            document.getElementById('movementDistributionChart').parentElement.innerHTML = "<p class='text-center italic text-gray-500'>Data distribusi gerakan tidak tersedia.</p>";
+        }
+
+        // --- Populate Latest Observations ---
+        const observationNotesContainer = document.getElementById('observationNotesContainer');
+        observationNotesContainer.innerHTML = ''; // Clear loading message
+
+        if (monitoringData && monitoringData.catatan_observasi_terbaru && monitoringData.catatan_observasi_terbaru.length > 0) {
+            monitoringData.catatan_observasi_terbaru.forEach(note => {
+                const noteCard = `
+                    <div class="observation-card">
+                        <p class="note-content">${note.catatan || 'Tidak ada catatan.'}</p>
+                        <p class="note-meta">Oleh: ${note.sumber || 'N/A'} - ${formatSimpleDate(note.tanggal)}</p>
+                    </div>
+                `;
+                observationNotesContainer.innerHTML += noteCard;
+            });
+        } else {
+            observationNotesContainer.innerHTML = '<p class="text-center py-4 text-gray-500 italic">Tidak ada catatan observasi terbaru.</p>';
+        }
+
+        // --- Populate Program History (using patient_rehab_history from Flask) ---
+        const programHistoryTableBody = document.getElementById('programHistoryTableBody');
+        programHistoryTableBody.innerHTML = ''; // Clear loading message
+
+        if (patientRehabHistory && patientRehabHistory.length > 0) {
+            // Construct the base URL for program report detail dynamically in JavaScript.
+            // This avoids Flask's url_for trying to parse an empty string as an integer.
+            const baseUrl = window.location.origin; // Get the base URL, e.g., http://127.0.0.1:5000
+            
+            patientRehabHistory.forEach(program => {
+                const statusClass = program.status_program ? `status-${program.status_program.toLowerCase().replace('_', '-')}` : 'status-unknown';
+                
+                // Construct the full URL for the report detail page
+                const detailLink = program.laporan_id && program.id 
+                    ? `<a href="${baseUrl}/program-report/${currentPatientId}/${program.id}" class="text-blue-600 hover:underline">Lihat Laporan</a>`
+                    : 'N/A';
+
+                const row = `
+                    <tr>
+                        <td class="table-td-report">${formatSimpleDate(program.tanggal_program)}</td>
+                        <td class="table-td-report">${program.nama_program || 'N/A'}</td>
+                        <td class="table-td-report">${program.keterangan_sesi || 'Tidak ada catatan.'}</td>
+                        <td class="table-td-report"><span class="program-status ${statusClass}">${program.status_program ? program.status_program.replace('_', ' ').toUpperCase() : 'N/A'}</span></td>
+                        <td class="table-td-report">${detailLink}</td>
+                    </tr>
+                `;
+                programHistoryTableBody.innerHTML += row;
+            });
+        } else {
+            programHistoryTableBody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-gray-500 italic">Belum ada riwayat program selesai.</td></tr>';
+        }
+
+        // --- Meal Plan Feature ---
+        const mealPlanForm = document.getElementById('mealPlanForm');
+        const mealPlanHistoryContainer = document.getElementById('mealPlanHistoryContainer');
+
+        // Function to render meal plans into the history container
+        function renderMealPlans() {
+            mealPlanHistoryContainer.innerHTML = ''; // Clear existing plans
+            if (patientMealPlans && patientMealPlans.length > 0) {
+                // Sort meal plans by date in descending order (most recent first)
+                const sortedMealPlans = [...patientMealPlans].sort((a, b) => new Date(b.tanggal_makan) - new Date(a.tanggal_makan));
+
+                sortedMealPlans.forEach(plan => {
+                    const mealPlanCard = `
+                        <div class="meal-plan-card">
+                            <h3>Pola Makan Tanggal: ${formatSimpleDate(plan.tanggal_makan)}</h3>
+                            <p><strong>Pagi:</strong> ${plan.menu_pagi || 'Tidak ada'}</p>
+                            <p><strong>Siang:</strong> ${plan.menu_siang || 'Tidak ada'}</p>
+                            <p><strong>Malam:</strong> ${plan.menu_malam || 'Tidak ada'}</p>
+                            <p><strong>Cemilan:</strong> ${plan.cemilan || 'Tidak ada'}</p>
+                        </div>
+                    `;
+                    mealPlanHistoryContainer.innerHTML += mealPlanCard;
+                });
+            } else {
+                mealPlanHistoryContainer.innerHTML = '<p class="col-span-full text-center py-4 text-gray-500 italic">Belum ada pola makan yang diatur.</p>';
             }
         }
+
+        // Initial render of meal plans when the page loads
+        renderMealPlans();
+
+        // Event listener for the meal plan form submission
+        mealPlanForm.addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent default form submission
+
+            const mealDate = document.getElementById('mealDate').value;
+            const breakfastMenu = document.getElementById('breakfastMenu').value;
+            const lunchMenu = document.getElementById('lunchMenu').value;
+            const dinnerMenu = document.getElementById('dinnerMenu').value;
+            const snacksMenu = document.getElementById('snacksMenu').value;
+
+            if (!mealDate) {
+                alert('Tanggal pola makan harus diisi.');
+                return;
+            }
+
+            const newMealPlanData = {
+                pasien_id: currentPatientId,
+                tanggal_makan: mealDate,
+                menu_pagi: breakfastMenu,
+                menu_siang: lunchMenu,
+                menu_malam: dinnerMenu,
+                cemilan: snacksMenu
+            };
+
+            // Send data to the Flask route for saving meal plan
+            fetch(`/patient/${currentPatientId}/save_meal_plan`, { // Corrected URL to local Flask route
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(newMealPlanData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.msg) {
+                    alert(data.msg);
+                    // If successfully saved/updated, add/update the plan in the local array
+                    // and re-render the list.
+                    // This is a simplified approach. In a real app, you might re-fetch all plans.
+                    const existingIndex = patientMealPlans.findIndex(plan => plan.tanggal_makan === newMealPlanData.tanggal_makan);
+                    if (existingIndex !== -1) {
+                        patientMealPlans[existingIndex] = data.pola_makan || newMealPlanData; // Update existing
+                    } else {
+                        patientMealPlans.push(data.pola_makan || newMealPlanData); // Add new
+                    }
+                    renderMealPlans(); // Re-render the list
+                    mealPlanForm.reset(); // Clear the form
+                } else if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    alert('Terjadi kesalahan tidak diketahui saat menyimpan pola makan.');
+                }
+            })
+            .catch(error => {
+                console.error('Error saving meal plan:', error);
+                alert('Terjadi kesalahan saat menghubungi server untuk menyimpan pola makan.');
+            });
+        });
+
+        // Open the first tab by default
+        // The `event` parameter here is `undefined` as it's not a direct user event.
+        // We'll simulate it or use a default
+        openTab({ currentTarget: document.querySelector('.tab-button.active') }, 'programHistory');
     });
 </script>
 {% endblock %}
