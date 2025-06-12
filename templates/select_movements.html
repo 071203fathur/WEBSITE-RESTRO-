@@ -22,9 +22,83 @@
             right: 2rem;  /* Jarak 32px dari kanan */
             z-index: 100; /* Pastikan tombol di atas elemen lain */
         }
+        /* Style for the new movement form card (now a link) */
+        .add-new-card {
+            border: 2px dashed #ccc;
+            background-color: #f9f9f9;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none; /* Remove underline for link */
+            color: inherit; /* Inherit color */
+        }
+        .add-new-card:hover {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+        .add-new-card .icon {
+            font-size: 3rem;
+            color: #3b82f6;
+            margin-bottom: 0.5rem;
+        }
+        .add-new-card .text {
+            font-weight: 600;
+            color: #3b82f6;
+        }
+        /* Modal styles (kept for detail modal) */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            justify-content: center; /* Center horizontally */
+            align-items: center; /* Center vertically */
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 90%;
+            max-width: 500px;
+            border-radius: 8px;
+            position: relative;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .close-button {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            cursor: pointer;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
     </style>
     <link rel="icon" href="{{ url_for('static', filename='img/logo.png') }}" type="image/png">
-
 {% endblock %}
 
 {% block content %}
@@ -36,18 +110,15 @@
         </div>
     </div>
 
-    {# Form ini tidak di-submit secara tradisional, tapi datanya diambil oleh JS #}
     <form id="selectMovementsForm"> 
         <div class="movement-grid" id="movementGridContainer">
             {% if movements %}
                 {% for movement in movements %}
                 <div class="movement-card" data-movement-id="{{ movement.id }}" data-movement-name="{{ movement.nama_gerakan }}">
                     <input type="checkbox" class="movement-checkbox" value="{{ movement.id }}">
-                    {# Gunakan movement.url_foto dari API jika ada, atau placeholder #}
                     <img src="{{ movement.url_foto if movement.url_foto else url_for('static', filename='img/default-gerakan.png') }}"
                         alt="{{ movement.nama_gerakan }}" class="movement-image"
-                        this.onerror = null; 
-                         this.src = "{{ url_for('static', filename='img/default-gerakan.png') }}"; >
+                        data-fallback="{{ url_for('static', filename='img/default-gerakan.png') }}">
                     <span class="movement-name">{{ movement.nama_gerakan }}</span>
                     
                     <div class="repetition-input-group" style="display: none;">
@@ -75,13 +146,15 @@
                 <p class="col-span-full text-center italic">Tidak ada gerakan tersedia di perpustakaan.</p>
             {% endif %}
 
-
+            <a href="{{ url_for('create_movement') }}" class="movement-card add-new-card" id="addNewMovementCard">
+                <span class="icon">+</span>
+                <span class="text">Buat Gerakan Baru</span>
+            </a>
         </div>
 
         <button type="button" class="button primary fixed-bottom-button" id="saveSelectedMovementsButton" disabled>Simpan Pilihan Gerakan</button>
     </form>
 
-    <!-- Modal untuk Detail Gerakan -->
     <div id="movementDetailModal" class="modal" style="display:none; position:fixed; z-index:100; left:0; top:0; width:100%; height:100%; overflow:auto; background-color:rgba(0,0,0,0.6); align-items:center; justify-content:center;">
         <div class="modal-content bg-white p-6 rounded-lg shadow-xl max-w-lg w-11/12 relative">
             <span class="close-button absolute top-3 right-4 text-2xl font-bold cursor-pointer hover:text-red-500" onclick="closeModal()">&times;</span>
@@ -95,7 +168,15 @@
 
 {% block scripts_extra %}
 <script>
-    // selectedMovementsData akan menyimpan: { "gerakan_id": { id: ..., name: ..., count: ..., unit: ..., urutan: ... }, ... }
+    // Error handling for movement images
+    document.querySelectorAll('.movement-image').forEach(img => {
+        img.onerror = function() {
+            this.onerror = null;
+            this.src = this.dataset.fallback;
+        };
+    });
+
+    // selectedMovementsData will store: { "gerakan_id": { id: ..., name: ..., count: ..., unit: ..., urutan: ... }, ... }
     let selectedMovementsData = {}; 
     const initialSelectedMovementsJson = '{{ selected_movements_json_str | default("[]") | safe }}';
 
@@ -104,12 +185,12 @@
         if (Array.isArray(initialSelected)) {
             initialSelected.forEach(item => {
                 if (item && typeof item === 'object' && item.id) {
-                    selectedMovementsData[item.id.toString()] = { // Pastikan ID adalah string untuk key objek
+                    selectedMovementsData[item.id.toString()] = {
                         id: item.id,
                         name: item.name || document.querySelector(`.movement-card[data-movement-id="${item.id}"] .movement-name`)?.textContent || 'Gerakan',
                         count: item.count || '',
                         unit: item.unit || 'kali',
-                        urutan: item.urutan || ''
+                        urutan: ''
                     };
                 }
             });
@@ -129,7 +210,6 @@
                 if (!data || data.count === '' || (data.unit !== 'sesuai kebutuhan' && (isNaN(parseInt(data.count)) || parseInt(data.count) <= 0))) {
                     allValid = false;
                 }
-                // Validasi urutan bisa ditambahkan jika urutan wajib unik
             });
         }
         saveButton.disabled = !allValid;
@@ -143,11 +223,19 @@
         const unitSelect = repetitionGroup.querySelector('.repetition-unit');
         const orderInput = repetitionGroup.querySelector('.repetition-order');
 
-        // Inisialisasi state dari selectedMovementsData
         if (selectedMovementsData[movementId]) {
             checkbox.checked = true;
             movementCard.classList.add('selected');
             repetitionGroup.style.display = 'flex';
+            if (!selectedMovementsData[movementId]) {
+                selectedMovementsData[movementId] = {
+                    id: parseInt(movementId),
+                    name: movementCard.dataset.movementName,
+                    count: '', 
+                    unit: 'kali',
+                    urutan: ''
+                };
+            }
             countInput.value = selectedMovementsData[movementId].count;
             unitSelect.value = selectedMovementsData[movementId].unit;
             orderInput.value = selectedMovementsData[movementId].urutan;
@@ -159,13 +247,13 @@
             if (this.checked) {
                 movementCard.classList.add('selected');
                 repetitionGroup.style.display = 'flex';
-                if (!selectedMovementsData[movementId]) { // Inisialisasi jika baru dipilih
+                if (!selectedMovementsData[movementId]) {
                     selectedMovementsData[movementId] = {
-                        id: parseInt(movementId), // Simpan ID sebagai angka
+                        id: parseInt(movementId),
                         name: movementCard.dataset.movementName,
                         count: '', 
                         unit: 'kali',
-                        urutan: '' // Biarkan kosong atau default
+                        urutan: ''
                     };
                 }
                 countInput.value = selectedMovementsData[movementId].count;
@@ -180,7 +268,7 @@
         });
 
         [countInput, unitSelect, orderInput].forEach(inputEl => {
-            inputEl.addEventListener('input', function() { // 'input' untuk text/number, 'change' untuk select
+            inputEl.addEventListener('input', function() {
                 if (selectedMovementsData[movementId]) {
                     selectedMovementsData[movementId].count = countInput.value;
                     selectedMovementsData[movementId].unit = unitSelect.value;
@@ -188,7 +276,7 @@
                 }
                 updateSaveButtonState();
             });
-            inputEl.addEventListener('change', function() { // Untuk select
+            inputEl.addEventListener('change', function() {
                  if (selectedMovementsData[movementId]) {
                     selectedMovementsData[movementId].unit = unitSelect.value;
                 }
@@ -199,7 +287,6 @@
 
     document.getElementById('saveSelectedMovementsButton').addEventListener('click', function() {
         const movementsToSave = Object.values(selectedMovementsData);
-        // Kirim ke backend Flask (Website-Monitoring) untuk disimpan di session
         fetch("{{ url_for('update_selected_movements_view', patient_id=patient.id if patient else 0) }}", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -208,20 +295,20 @@
         .then(response => response.json())
         .then(data => {
             if (data.msg) {
-                // Redirect kembali ke halaman add_activity
                 window.location.href = "{{ url_for('add_activity', patient_id=patient.id if patient else 0) }}";
             } else {
-                alert('Gagal menyimpan pilihan gerakan: ' + (data.error || 'Error tidak diketahui'));
+                // Use a custom message box instead of alert()
+                showCustomMessageBox('Gagal menyimpan pilihan gerakan', data.error || 'Error tidak diketahui');
             }
         })
         .catch(error => {
             console.error('Error updating selected movements:', error);
-            alert('Terjadi kesalahan saat menyimpan pilihan gerakan.');
+            // Use a custom message box instead of alert()
+            showCustomMessageBox('Terjadi kesalahan', 'Terjadi kesalahan saat menghubungi server untuk membuat gerakan baru.');
         });
     });
 
     function showMovementDetailModal(event) {
-        // ... (fungsi showMovementDetailModal tetap sama, pastikan dataset image dan video benar)
         event.preventDefault(); event.stopPropagation();
         const button = event.currentTarget;
         document.getElementById("modalMovementName").textContent = button.dataset.name;
@@ -232,23 +319,26 @@
         imgEl.onerror = () => { imgEl.src = "{{ url_for('static', filename='img/default-gerakan.png') }}"; };
 
         const videoContainer = document.getElementById("modalMovementVideoContainer");
-        videoContainer.innerHTML = ''; // Kosongkan dulu
+        videoContainer.innerHTML = '';
         if (button.dataset.video && button.dataset.video !== 'None' && button.dataset.video !== '') {
             const videoEl = document.createElement('video');
             videoEl.src = button.dataset.video;
             videoEl.controls = true;
-            videoEl.className = 'max-w-full h-auto max-h-64 mx-auto mb-3 rounded'; // Mirip gambar
+            videoEl.className = 'max-w-full h-auto max-h-64 mx-auto mb-3 rounded';
             videoContainer.appendChild(videoEl);
         }
 
         document.getElementById("movementDetailModal").style.display = "flex";
     }
     function closeModal() { document.getElementById("movementDetailModal").style.display = "none"; }
-    window.onclick = function(event) { if (event.target == document.getElementById("movementDetailModal")) closeModal(); }
+    window.onclick = function(event) { 
+        if (event.target == document.getElementById("movementDetailModal")) {
+            closeModal();
+        }
+    }
     
     document.querySelectorAll('.detail-button').forEach(button => button.addEventListener('click', showMovementDetailModal));
     
-    // Filter
     document.getElementById('searchMovementInput').addEventListener('keyup', function() {
         const filter = this.value.toUpperCase();
         document.querySelectorAll('.movement-card:not(.add-new-card)').forEach(card => {
@@ -257,8 +347,113 @@
         });
     });
 
-    // Panggil validasi awal
     updateSaveButtonState();
-</script>
+
+    // --- Custom Message Box Implementation (replaces alert/confirm) ---
+    function showCustomMessageBox(title, message, type = 'info') {
+        const messageBox = document.createElement('div');
+        messageBox.classList.add('custom-message-box', `message-box-${type}`);
+        messageBox.innerHTML = `
+            <div class="message-box-header">
+                <h3>${title}</h3>
+                <span class="close-message-box">&times;</span>
+            </div>
+            <div class="message-box-body">
+                <p>${message}</p>
+            </div>
+            <div class="message-box-footer">
+                <button class="message-box-ok-button">OK</button>
+            </div>
+        `;
+        document.body.appendChild(messageBox);
+
+        // Center the message box
+        messageBox.style.top = '50%';
+        messageBox.style.left = '50%';
+        messageBox.style.transform = 'translate(-50%, -50%)';
+        messageBox.style.display = 'flex'; // Make it visible
+
+        messageBox.querySelector('.close-message-box').addEventListener('click', () => {
+            document.body.removeChild(messageBox);
+        });
+        messageBox.querySelector('.message-box-ok-button').addEventListener('click', () => {
+            document.body.removeChild(messageBox);
+        });
+
+        // Add basic styles for the message box
+        const style = document.createElement('style');
+        style.innerHTML = `
+            .custom-message-box {
+                position: fixed;
+                background-color: #fff;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+                z-index: 2000;
+                max-width: 400px;
+                width: 90%;
+                display: none; /* Controlled by JS */
+                flex-direction: column;
+                overflow: hidden; /* For rounded corners */
+            }
+            .message-box-header {
+                background-color: #f3f4f6;
+                padding: 10px 15px;
+                border-bottom: 1px solid #eee;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .message-box-header h3 {
+                margin: 0;
+                font-size: 1.1em;
+                color: #333;
+            }
+            .close-message-box {
+                font-size: 1.5em;
+                cursor: pointer;
+                color: #666;
+            }
+            .close-message-box:hover {
+                color: #000;
+            }
+            .message-box-body {
+                padding: 15px;
+                color: #555;
+            }
+            .message-box-footer {
+                padding: 10px 15px;
+                border-top: 1px solid #eee;
+                text-align: right;
+            }
+            .message-box-ok-button {
+                background-color: #3b82f6;
+                color: white;
+                border: none;
+                padding: 8px 15px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 0.9em;
+            }
+            .message-box-ok-button:hover {
+                background-color: #2563eb;
+            }
+            .message-box-danger .message-box-header { background-color: #fee2e2; }
+            .message-box-danger .message-box-header h3, .message-box-danger .message-box-body { color: #dc2626; }
+            .message-box-danger .message-box-ok-button { background-color: #dc2626; }
+            .message-box-danger .message-box-ok-button:hover { background-color: #b91c1c; }
+
+            .message-box-success .message-box-header { background-color: #d1fae5; }
+            .message-box-success .message-box-header h3, .message-box-success .message-box-body { color: #059669; }
+            .message-box-success .message-box-ok-button { background-color: #10b981; }
+            .message-box-success .message-box-ok-button:hover { background-color: #047857; }
+
+            .message-box-warning .message-box-header { background-color: #fff3cd; }
+            .message-box-warning .message-box-header h3, .message-box-warning .message-box-body { color: #b45309; }
+            .message-box-warning .message-box-ok-button { background-color: #f59e0b; }
+            .message-box-warning .message-box-ok-button:hover { background-color: #d97706; }
+        `;
+        document.head.appendChild(style);
+    }
 </script>
 {% endblock %}

@@ -10,7 +10,7 @@ app = Flask(__name__)
 app.secret_key = 'website_monitoring_super_secret_key_CHANGE_ME_PLEASE_AGAIN' 
 
 # --- Konfigurasi untuk API Backend BE-RESTRO ---
-API_BASE_URL = "http://127.0.0.1:5001"
+API_BASE_URL = "https://be-restro-api-fnfpghddbka7d4aw.eastasia-01.azurewebsites.net"
 
 # --- Fungsi Helper untuk Request ke API Backend ---
 def api_request(method, endpoint, data=None, params=None, files=None, use_token=True):
@@ -24,6 +24,8 @@ def api_request(method, endpoint, data=None, params=None, files=None, use_token=
     
     try:
         if files:
+            # requests will automatically set Content-Type: multipart/form-data for files
+            # and handle the encoding. Do not set 'Content-Type': 'application/json' for files.
             response = requests.request(method.upper(), url, headers=headers, data=data, files=files, params=params, timeout=20)
         else:
             if data is not None:
@@ -166,12 +168,9 @@ def home():
              
              try:
                  program_id = int(program_id) if program_id is not None else 0
-             except (ValueError, TypeError):
-                 program_id = 0
-             
-             try:
                  patient_id_for_program = int(patient_id_for_program) if patient_id_for_program is not None else 0
              except (ValueError, TypeError):
+                 program_id = 0
                  patient_id_for_program = 0
 
              programs_for_display_home.append({
@@ -561,7 +560,7 @@ def program_report_detail(patient_id, program_id):
         patient_data_for_template['id'] = patient_data_for_template.get('id', patient_id)
 
 
-        # Check if 'laporan_terkait' exists within the program data
+        # Check if 'laporan_terkait' in program data exists
         if 'laporan_terkait' in program_data_from_api and isinstance(program_data_from_api['laporan_terkait'], dict):
             report_data_for_template = program_data_from_api['laporan_terkait']
             # If report is found here, it's considered successfully loaded. No flash message needed.
@@ -593,12 +592,62 @@ def program_report_detail(patient_id, program_id):
 
 @app.route('/logout') 
 def logout(): 
-    # Menghapus semua data dari sesi pengguna
+    # Clear all data from the user session
     session.clear() 
-    # Menampilkan pesan sukses kepada pengguna
+    # Display a success message to the user
     flash('Anda telah berhasil logout.', 'success')
-    # Mengarahkan pengguna kembali ke halaman login
+    # Redirect the user back to the login page
     return redirect(url_for('login'))
+
+# NEW ROUTE: Display form for creating a new movement
+@app.route('/create_movement', methods=['GET'])
+def create_movement():
+    if not is_logged_in() or get_current_user_role() != 'terapis':
+        flash("Sesi tidak valid atau Anda bukan terapis. Silakan login kembali.", "warning")
+        return redirect(url_for('login'))
+    return render_template('create_movement.html', username=get_current_user_name())
+
+
+# MODIFIED ROUTE: Handle POST for creating a new movement, then redirect
+@app.route('/api/create_movement', methods=['POST'])
+def create_new_movement():
+    if not is_logged_in() or get_current_user_role() != 'terapis':
+        flash("Sesi tidak valid atau Anda bukan terapis.", "warning")
+        return redirect(url_for('login'))
+
+    nama_gerakan = request.form.get('nama_gerakan')
+    deskripsi = request.form.get('deskripsi', '')
+
+    if not nama_gerakan:
+        flash("Nama gerakan wajib diisi.", "danger")
+        return redirect(url_for('create_movement'))
+
+    # Prepare data for text fields
+    payload_data = {
+        "nama_gerakan": nama_gerakan,
+        "deskripsi": deskripsi
+    }
+
+    # Prepare files for multipart/form-data
+    files = {}
+    if 'foto' in request.files:
+        files['foto'] = (request.files['foto'].filename, request.files['foto'].read(), request.files['foto'].content_type)
+    if 'video' in request.files:
+        files['video'] = (request.files['video'].filename, request.files['video'].read(), request.files['video'].content_type)
+    if 'model_tflite' in request.files:
+        files['model_tflite'] = (request.files['model_tflite'].filename, request.files['model_tflite'].read(), request.files['model_tflite'].content_type)
+
+    # Call the backend API
+    api_response, status_code, _ = api_request('POST', '/api/gerakan/', data=payload_data, files=files)
+
+    if status_code == 201:
+        flash('Gerakan baru berhasil dibuat!', 'success')
+        return redirect(url_for('select_movements_view', patient_id=session.get('patient_id_for_activity', 0))) # Redirect back to select movements or patient detail
+    else:
+        error_msg = api_response.get('msg', api_response.get('error', 'Terjadi kesalahan saat membuat gerakan baru.'))
+        flash(f"Gagal membuat gerakan baru: {error_msg}", 'danger')
+        return redirect(url_for('create_movement')) # Stay on the creation page to show error
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Buat Gerakan Baru{% endblock %}
+
+{% block head_extra %}
+    <style>
+        .form-container {
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #333;
+        }
+        .form-group input[type="text"],
+        .form-group textarea,
+        .form-group input[type="file"] {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        .button-group {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        .button {
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .button.primary {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+        }
+        .button.primary:hover {
+            background-color: #2563eb;
+        }
+        .button.secondary {
+            background-color: #6b7280;
+            color: white;
+            border: none;
+        }
+        .button.secondary:hover {
+            background-color: #4b5563;
+        }
+        .required-indicator {
+            color: red;
+            font-weight: normal;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="page-header">
+        <a href="{{ url_for('select_movements_view', patient_id=session.get('patient_id_for_activity', 0)) }}" class="back-link">&larr; Kembali ke Pilihan Gerakan</a>
+        <h1>Buat Gerakan Baru</h1>
+    </div>
+
+    <div class="form-container">
+        <form id="createMovementForm" action="{{ url_for('create_new_movement') }}" method="POST" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="nama_gerakan">Nama Gerakan <span class="required-indicator">*</span></label>
+                <input type="text" id="nama_gerakan" name="nama_gerakan" required>
+            </div>
+            <div class="form-group">
+                <label for="deskripsi">Deskripsi</label>
+                <textarea id="deskripsi" name="deskripsi"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="foto">Foto (Opsional)</label>
+                <input type="file" id="foto" name="foto" accept="image/*">
+            </div>
+            <div class="form-group">
+                <label for="video">Video (Opsional)</label>
+                <input type="file" id="video" name="video" accept="video/*">
+            </div>
+            <div class="form-group">
+                <label for="model_tflite">Model TFLite (Opsional)</label>
+                <input type="file" id="model_tflite" name="model_tflite" accept=".tflite">
+            </div>
+            <div class="button-group">
+                <button type="button" class="button secondary" onclick="window.history.back()">Batal</button>
+                <button type="submit" class="button primary">Simpan Gerakan</button>
+            </div>
+        </form>
+    </div>
+{% endblock %}
