@@ -700,45 +700,51 @@
                 cemilan: snacksMenu
             };
 
-            // Send data to the Flask route for saving meal plan
-            fetch(`/patient/${currentPatientId}/save_meal_plan`, { // Corrected URL to local Flask route
+            // ==========================================================
+            // === PERBAIKAN UTAMA ADA DI BLOK FETCH DI BAWAH INI ===
+            // ==========================================================
+
+            // Send data to the CORRECT Flask route for saving meal plan
+            fetch(`/api/terapis/diet-plan`, { // <-- URL SUDAH DIPERBAIKI
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(newMealPlanData)
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.msg) {
-                    alert(data.msg);
-                    // If successfully saved/updated, add/update the plan in the local array
-                    // and re-render the list.
-                    // This is a simplified approach. In a real app, you might re-fetch all plans.
-                    const existingIndex = patientMealPlans.findIndex(plan => plan.tanggal_makan === newMealPlanData.tanggal_makan);
-                    if (existingIndex !== -1) {
-                        patientMealPlans[existingIndex] = data.pola_makan || newMealPlanData; // Update existing
-                    } else {
-                        patientMealPlans.push(data.pola_makan || newMealPlanData); // Add new
-                    }
-                    renderMealPlans(); // Re-render the list
-                    mealPlanForm.reset(); // Clear the form
-                } else if (data.error) {
-                    alert('Error: ' + data.error);
-                } else {
-                    alert('Terjadi kesalahan tidak diketahui saat menyimpan pola makan.');
+            .then(response => {
+                // Cek jika response tidak OK (misal: error 400, 500)
+                if (!response.ok) {
+                    // Coba ekstrak pesan error dari body JSON
+                    return response.json().then(err => { throw err; });
                 }
+                return response.json();
+            })
+            .then(data => {
+                // Respons sukses dari server
+                alert(data.msg || "Pola makan berhasil disimpan!");
+                
+                // Update tampilan di frontend
+                const existingIndex = patientMealPlans.findIndex(plan => plan.tanggal_makan === newMealPlanData.tanggal_makan);
+                if (existingIndex !== -1) {
+                    patientMealPlans[existingIndex] = data.pola_makan || newMealPlanData; // Update
+                } else {
+                    patientMealPlans.push(data.pola_makan || newMealPlanData); // Add new
+                }
+                renderMealPlans(); // Re-render daftar pola makan
+                mealPlanForm.reset(); // Kosongkan form
             })
             .catch(error => {
                 console.error('Error saving meal plan:', error);
-                alert('Terjadi kesalahan saat menghubungi server untuk menyimpan pola makan.');
+                // Tampilkan pesan error yang lebih spesifik jika ada
+                const errorMessage = error.msg || error.error || 'Terjadi kesalahan saat menghubungi server untuk menyimpan pola makan.';
+                alert('Error: ' + errorMessage);
             });
         });
 
         // Open the first tab by default
-        // The `event` parameter here is `undefined` as it's not a direct user event.
-        // We'll simulate it or use a default
         openTab({ currentTarget: document.querySelector('.tab-button.active') }, 'programHistory');
     });
 </script>
 {% endblock %}
+<!-- das -->
