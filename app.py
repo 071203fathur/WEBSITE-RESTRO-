@@ -25,6 +25,10 @@ app.secret_key = 'website_monitoring_super_secret_key_CHANGE_ME_PLEASE_AGAIN'
 # Di Azure App Service, variabel lingkungan akan langsung tersedia
 load_dotenv()
 
+# Global flag to track Firebase Admin SDK initialization status
+# Bendera global untuk melacak status inisialisasi Firebase Admin SDK
+firebase_admin_initialized = False
+
 # --- Konfigurasi Firebase Admin SDK ---
 # Mengambil konten JSON kredensial langsung dari environment variable
 # Nama environment variable ini harus sesuai dengan yang diatur di Azure App Service atau file .env
@@ -38,21 +42,28 @@ try:
             cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)
             print("Firebase Admin SDK initialized successfully from environment variable.")
+            firebase_admin_initialized = True
         else:
             print("WARNING: FIREBASE_ADMIN_SDK_JSON_CONTENT environment variable not found. Firebase Admin SDK not initialized.")
-            # Anda bisa memilih untuk raise Exception di sini jika Firebase Admin SDK wajib
+            # Di lingkungan produksi, Anda mungkin ingin me-raise Exception di sini
+            # In a production environment, you might want to raise an Exception here
             # raise ValueError("Firebase Admin SDK credentials not provided in environment variable.")
     else:
         print("Firebase Admin SDK already initialized.")
+        firebase_admin_initialized = True # Set true if already initialized
 except json.JSONDecodeError as e:
     print(f"ERROR: Failed to parse Firebase credentials JSON from environment variable: {e}")
-    # Untuk debugging, Anda bisa mencetak sebagian string jika terlalu panjang
-    # print(f"DEBUG: String provided (first 200 chars): {FIREBASE_ADMIN_SDK_JSON_CONTENT[:200]}..." if FIREBASE_ADMIN_SDK_JSON_CONTENT else "No string provided.")
-    # Tangani error parsing JSON, misal: flash pesan ke user atau log lebih detail
-    pass # Jangan langsung pass di produksi, ini bisa menyebabkan masalah tidak terdeteksi
+    print(f"DEBUG: String provided (first 200 chars): {FIREBASE_ADMIN_SDK_JSON_CONTENT[:200]}..." if FIREBASE_ADMIN_SDK_JSON_CONTENT else "No string provided.")
+    # Flash a message to the user or log more critically in production
+    # Flash pesan ke user atau log lebih kritis di produksi
+    # flash("Firebase Admin SDK initialization failed: Invalid JSON credentials.", "danger")
+    firebase_admin_initialized = False
 except Exception as e:
     print(f"ERROR: Error initializing Firebase Admin SDK: {e}")
-    pass # Jangan langsung pass di produksi, ini bisa menyebabkan masalah tidak terdeteksi
+    # Flash a message to the user or log more critically in production
+    # Flash pesan ke user atau log lebih kritis di produksi
+    # flash(f"Firebase Admin SDK initialization failed: {e}", "danger")
+    firebase_admin_initialized = False
 
 
 # --- Konfigurasi untuk API Backend BE-RESTRO ---
@@ -209,32 +220,42 @@ def login():
             terapis_id_from_backend = session['user_info'].get('id') 
             if terapis_id_from_backend:
                 uid_str = str(terapis_id_from_backend) 
-                try:
-                    user = auth.get_user(uid_str)
-                    print(f"Firebase user with UID {uid_str} already exists.")
-                except UserNotFoundError:
+                
+                # Check if Firebase Admin SDK is initialized before using it
+                # Periksa apakah Firebase Admin SDK sudah diinisialisasi sebelum menggunakannya
+                if not firebase_admin_initialized:
+                    print("ERROR: Firebase Admin SDK not initialized. Cannot create/fetch Firebase user or custom token.")
+                    flash("Sistem chat tidak siap. Admin SDK Firebase gagal diinisialisasi.", "danger")
+                    # Optionally, you might want to redirect or show a more severe error
+                    # Opsional, Anda mungkin ingin mengarahkan atau menunjukkan error yang lebih parah
+                    # return redirect(url_for('login')) 
+                else:
                     try:
-                        user = auth.create_user(uid=uid_str, display_name=session['user_info'].get('nama_lengkap'), email=session['user_info'].get('email'))
-                        print(f"Successfully created new Firebase user with UID: {user.uid}")
+                        user = auth.get_user(uid_str)
+                        print(f"Firebase user with UID {uid_str} already exists.")
+                    except UserNotFoundError:
+                        try:
+                            user = auth.create_user(uid=uid_str, display_name=session['user_info'].get('nama_lengkap'), email=session['user_info'].get('email'))
+                            print(f"Successfully created new Firebase user with UID: {user.uid}")
+                        except Exception as e:
+                            print(f"ERROR: Failed to create Firebase user with UID {uid_str}: {e}")
+                            flash("Gagal membuat pengguna Firebase. Fitur chat mungkin tidak berfungsi.", "warning")
+                            user = None 
                     except Exception as e:
-                        print(f"ERROR: Failed to create Firebase user with UID {uid_str}: {e}")
-                        flash("Gagal membuat pengguna Firebase. Fitur chat mungkin tidak berfungsi.", "warning")
-                        user = None 
-                except Exception as e:
-                    print(f"ERROR: Failed to fetch Firebase user {uid_str}: {e}")
-                    flash("Gagal memverifikasi pengguna Firebase. Fitur chat mungkin tidak berfungsi.", "warning")
-                    user = None
+                        print(f"ERROR: Failed to fetch Firebase user {uid_str}: {e}")
+                        flash("Gagal memverifikasi pengguna Firebase. Fitur chat mungkin tidak berfungsi.", "warning")
+                        user = None
 
-                if user: 
-                    try:
-                        firebase_custom_token = auth.create_custom_token(user.uid) 
-                        session['firebase_custom_token'] = firebase_custom_token.decode('utf-8') 
-                        print(f"Firebase Custom Token generated for UID: {user.uid}")
-                    except Exception as e:
-                        print(f"ERROR: Failed to generate Firebase custom token for UID {user.uid}: {e}")
-                        flash("Gagal menghasilkan token chat. Fitur chat mungkin tidak berfungsi.", "warning")
-                else: 
-                    flash("Tidak dapat menyiapkan Firebase Auth untuk chat. Silakan hubungi admin.", "warning")
+                    if user: 
+                        try:
+                            firebase_custom_token = auth.create_custom_token(user.uid) 
+                            session['firebase_custom_token'] = firebase_custom_token.decode('utf-8') 
+                            print(f"Firebase Custom Token generated for UID: {user.uid}")
+                        except Exception as e:
+                            print(f"ERROR: Failed to generate Firebase custom token for UID {user.uid}: {e}")
+                            flash("Gagal menghasilkan token chat. Fitur chat mungkin tidak berfungsi.", "warning")
+                    else: 
+                        flash("Tidak dapat menyiapkan Firebase Auth untuk chat. Silakan hubungi admin.", "warning")
             else:
                 print("WARNING: Terapis ID not found in session user info. Cannot generate Firebase custom token.")
                 flash("ID terapis tidak ditemukan. Fitur chat mungkin tidak berfungsi.", "warning")
