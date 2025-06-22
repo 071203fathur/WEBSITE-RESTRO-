@@ -227,8 +227,11 @@ def login():
             
             # --- Firebase Custom Token Generation & User Management ---
             terapis_id_from_backend = session['user_info'].get('id') 
+            print(f"DEBUG_FIREBASE_LOGIN: Terapis ID from backend: {terapis_id_from_backend} (Type: {type(terapis_id_from_backend)})")
+
             if terapis_id_from_backend:
                 uid_str = str(terapis_id_from_backend) 
+                print(f"DEBUG_FIREBASE_LOGIN: Converted UID string: {uid_str}")
                 
                 # Check if Firebase Admin SDK is initialized before using it
                 # Periksa apakah Firebase Admin SDK sudah diinisialisasi sebelum menggunakannya
@@ -1013,7 +1016,6 @@ def edit_badge_page(badge_id):
     Rute untuk halaman form edit badge. Mengambil data badge yang sudah ada.
     """
     if not is_logged_in() or get_current_user_role() != 'terapis':
-        flash("Sesi tidak valid atau Anda bukan terapis. Silakan login kembali.", "warning")
         return redirect(url_for('login'))
     
     badge_resp, status_code, _ = api_request('GET', f'/api/gamification/badges/{badge_id}')
