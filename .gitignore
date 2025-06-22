@@ -1,1 +1,4 @@
+# .gitignore
 restro/
+.env
+config/restro-62e50-firebase-adminsdk-fbsvc-d9b80ccd3c.json

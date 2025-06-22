@@ -6,35 +6,53 @@
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 import requests
-import json
+import json # Tambahkan ini untuk mengurai string JSON
 from datetime import date, datetime
+import os # Tambahkan ini untuk mengakses variabel lingkungan
+from dotenv import load_dotenv # Tambahkan ini untuk pengembangan lokal dengan file .env
 
 # --- Import Firebase Admin SDK ---
 import firebase_admin
 from firebase_admin import credentials, auth
 from firebase_admin.auth import UserNotFoundError # Import spesifik untuk menangani error user tidak ditemukan
-import os 
 
 app = Flask(__name__)
 # GANTI INI DENGAN KUNCI RAHASIA YANG KUAT DAN UNIK UNTUK APLIKASI WEBSITE ANDA!
-app.secret_key = 'website_monitoring_super_secret_key_CHANGE_ME_PLEASE_AGAIN' 
+app.secret_key = 'website_monitoring_super_secret_key_CHANGE_ME_PLEASE_AGAIN'
+
+# --- Load environment variables untuk pengembangan lokal ---
+# Ini akan memuat variabel dari file .env (jika ada) saat berjalan secara lokal
+# Di Azure App Service, variabel lingkungan akan langsung tersedia
+load_dotenv()
 
 # --- Konfigurasi Firebase Admin SDK ---
-# Anda harus mengganti 'path/to/your/firebase-adminsdk.json' dengan jalur sebenarnya
-# ke file kunci akun layanan Firebase Anda.
-# File ini berisi kredensial yang aman untuk Firebase Admin SDK.
-# DISARANKAN: Simpan path ini di environment variable (misal: FIREBASE_ADMIN_SDK_PATH)
-FIREBASE_ADMIN_SDK_PATH = os.getenv('FIREBASE_ADMIN_SDK_PATH', 'config/restro-62e50-firebase-adminsdk-fbsvc-d9b80ccd3c.json') 
+# Mengambil konten JSON kredensial langsung dari environment variable
+# Nama environment variable ini harus sesuai dengan yang diatur di Azure App Service atau file .env
+FIREBASE_ADMIN_SDK_JSON_CONTENT = os.getenv('FIREBASE_ADMIN_SDK_JSON_CONTENT')
 
 try:
-    if not firebase_admin._apps:
-        cred = credentials.Certificate(FIREBASE_ADMIN_SDK_PATH)
-        firebase_admin.initialize_app(cred)
-    print("Firebase Admin SDK initialized successfully.")
+    if not firebase_admin._apps: # Pastikan hanya diinisialisasi sekali
+        if FIREBASE_ADMIN_SDK_JSON_CONTENT:
+            # Mengurai string JSON dari environment variable
+            cred_dict = json.loads(FIREBASE_ADMIN_SDK_JSON_CONTENT)
+            cred = credentials.Certificate(cred_dict)
+            firebase_admin.initialize_app(cred)
+            print("Firebase Admin SDK initialized successfully from environment variable.")
+        else:
+            print("WARNING: FIREBASE_ADMIN_SDK_JSON_CONTENT environment variable not found. Firebase Admin SDK not initialized.")
+            # Anda bisa memilih untuk raise Exception di sini jika Firebase Admin SDK wajib
+            # raise ValueError("Firebase Admin SDK credentials not provided in environment variable.")
+    else:
+        print("Firebase Admin SDK already initialized.")
+except json.JSONDecodeError as e:
+    print(f"ERROR: Failed to parse Firebase credentials JSON from environment variable: {e}")
+    # Untuk debugging, Anda bisa mencetak sebagian string jika terlalu panjang
+    # print(f"DEBUG: String provided (first 200 chars): {FIREBASE_ADMIN_SDK_JSON_CONTENT[:200]}..." if FIREBASE_ADMIN_SDK_JSON_CONTENT else "No string provided.")
+    # Tangani error parsing JSON, misal: flash pesan ke user atau log lebih detail
+    pass # Jangan langsung pass di produksi, ini bisa menyebabkan masalah tidak terdeteksi
 except Exception as e:
-    print(f"Error initializing Firebase Admin SDK: {e}")
-    # Tangani error inisialisasi Admin SDK sesuai kebutuhan produksi Anda
-    pass
+    print(f"ERROR: Error initializing Firebase Admin SDK: {e}")
+    pass # Jangan langsung pass di produksi, ini bisa menyebabkan masalah tidak terdeteksi
 
 
 # --- Konfigurasi untuk API Backend BE-RESTRO ---
@@ -561,7 +579,7 @@ def add_activity(patient_id):
                     'execution_date': request.form.get('execution_date', ''),
                     'catatan_terapis': request.form.get('catatan_terapis', '')
                 }
-        
+            
         except (json.JSONDecodeError, ValueError, TypeError) as e:
             flash(f"Terjadi kesalahan dalam memproses data gerakan: {str(e)}", "danger")
             session['add_activity_form_data'] = { 
@@ -990,7 +1008,7 @@ def api_update_badge(badge_id):
     """
     API endpoint untuk memperbarui badge melalui backend.
     """
-    if not is_logged_in() or get_current_user_role() != 'terapis':
+    if not is_logged_in() or get_current_user_role() != 'terapis': # Fix: Changed 'is_loggedin' to 'is_logged_in'
         return jsonify({"msg": "Unauthorized"}), 401
 
     # Data dari form-data
