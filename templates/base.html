@@ -7,6 +7,333 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome untuk ikon chat -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="icon" href="{{ url_for('static', filename='img/logo.png') }}" type="image/png">
+
+    {# Meta tag untuk token akses API backend, penting untuk fetching pasien di JS #}
+    <meta name="access-token" content="{{ session.get('access_token', '') }}">
+
+    <style>
+        /* CSS Tambahan untuk Chat UI */
+        body {
+            /* Pastikan ada ruang di bagian bawah untuk tombol chat floating */
+            margin-bottom: 80px;
+            font-family: 'Inter', sans-serif; /* Mengatur font Inter */
+        }
+        .chat-toggle-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #28a745;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 9999px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.25rem;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            transform: scale(1);
+        }
+        .chat-toggle-button:hover {
+            background-color: #218838;
+            transform: scale(1.05);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .chat-container {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            width: 380px;
+            height: 500px;
+            background-color: #ffffff;
+            border-radius: 0.75rem;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 999;
+            transform: translateY(100%);
+            opacity: 0;
+            transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+            pointer-events: none;
+        }
+        .chat-container.open {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        /* Common Header style for both views */
+        .chat-header {
+            background-color: #28a745;
+            color: white;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            border-top-left-radius: 0.75rem;
+            border-top-right-radius: 0.75rem;
+            flex-shrink: 0; /* Ensure header doesn't shrink */
+        }
+        .chat-header .close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.25rem;
+            border-radius: 0.25rem;
+        }
+        .chat-header .close-btn:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Container for contact list view */
+        .chat-contacts-view {
+            display: flex; /* Default show for contact list */
+            flex-direction: column;
+            flex-grow: 1;
+            height: 100%; /* Ensure it takes full height when active */
+        }
+
+        /* Content area for contacts */
+        .chat-contacts-list {
+            width: 100%;
+            overflow-y: auto;
+            border-right: 1px solid #e5e7eb;
+            background-color: #f9fafb;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .contact-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .contact-item:hover {
+            background-color: #f3f4f6;
+        }
+        .contact-item.active {
+            background-color: #e0f2fe;
+            border-left: 4px solid #3b82f6;
+        }
+        .contact-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 0.75rem;
+            border: 2px solid #a7f3d0;
+        }
+        .contact-name {
+            font-weight: 500;
+            color: #1f2937;
+        }
+        .contact-last-message {
+            font-size: 0.875rem;
+            color: #6b7280;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: calc(100% - 40px - 0.75rem);
+        }
+
+        /* Container for individual chat view */
+        .chat-area {
+            flex-grow: 1;
+            display: none; /* Default hidden */
+            flex-direction: column;
+            height: 100%; /* Make sure chat-area takes full height when active */
+        }
+        .chat-area.active {
+            display: flex; /* Show when active */
+        }
+
+        /* CONTAINER PESAN CHAT */
+        .chat-messages {
+            flex-grow: 1; /* Memungkinkan pesan untuk mengisi sisa ruang yang tersedia */
+            padding: 1rem;
+            overflow-y: auto; /* Memungkinkan scroll pesan */
+            background-color: #f0f2f5;
+            display: flex;
+            flex-direction: column; /* Pesan dari atas ke bawah (lama ke baru) */
+            scroll-behavior: smooth;
+            min-height: 0; /* Penting: Mengatasi masalah scrolling pada flex item */
+        }
+        .message-bubble {
+            max-width: 75%;
+            padding: 0.6rem 1rem;
+            border-radius: 1.25rem;
+            margin-bottom: 0.75rem;
+            font-size: 0.9rem;
+            word-wrap: break-word;
+            line-height: 1.3;
+        }
+        .message-incoming {
+            background-color: #e2e8f0;
+            color: #1f2937;
+            align-self: flex-start;
+            border-bottom-left-radius: 0.25rem;
+        }
+        .message-outgoing {
+            background-color: #a7f3d0;
+            color: #10b981;
+            align-self: flex-end;
+            border-bottom-right-radius: 0.25rem;
+        }
+        .message-timestamp {
+            font-size: 0.7rem;
+            color: #9ca3af;
+            margin-top: 0.2rem;
+            margin-bottom: 0.5rem;
+            text-align: right;
+        }
+        .message-incoming + .message-timestamp {
+            text-align: left;
+        }
+
+        /* INPUT FIELD CHAT */
+        .chat-input {
+            border-top: 1px solid #e5e7eb;
+            padding: 0.75rem 1rem;
+            display: flex;
+            align-items: center;
+            background-color: #ffffff;
+            flex-shrink: 0; /* Pastikan input field tidak menyusut */
+            gap: 0.5rem; /* Menambahkan jarak antar item di input field */
+        }
+        .chat-input input[type="text"] {
+            flex-grow: 1;
+            padding: 0.75rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 9999px;
+            /* margin-right: 0.75rem; */ /* Dihapus karena gap sudah menangani spacing */
+            font-size: 0.9rem;
+        }
+        .chat-input button {
+            background-color: #28a745;
+            color: white;
+            padding: 0.75rem;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            transition: background-color 0.2s ease;
+            width: 40px; /* Fixed width for icon buttons */
+            height: 40px; /* Fixed height for icon buttons */
+            flex-shrink: 0; /* Prevent shrinking */
+        }
+        .chat-input button:hover {
+            background-color: #218838;
+        }
+        /* Style for new icons */
+        .chat-input .icon-btn {
+            background: none;
+            border: none;
+            color: #6b7280; /* Warna abu-abu yang lebih lembut */
+            font-size: 1.5rem; /* Ukuran ikon */
+            padding: 0.5rem;
+            cursor: pointer;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s ease;
+            width: 40px;
+            height: 40px;
+            flex-shrink: 0;
+        }
+        .chat-input .icon-btn:hover {
+            background-color: #e5e7eb; /* Warna hover abu-abu muda */
+        }
+
+
+        /* Modal custom untuk konfirmasi/alert */
+        .custom-message-box {
+            position: fixed;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 2000;
+            max-width: 400px;
+            width: 90%;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .message-box-header {
+            background-color: #f3f4f6;
+            padding: 10px 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .message-box-header h3 {
+                margin: 0;
+                font-size: 1.1em;
+                color: #333;
+        }
+        .close-message-box {
+            font-size: 1.5em;
+            cursor: pointer;
+            color: #666;
+        }
+        .close-message-box:hover {
+            color: #000;
+        }
+        .message-box-body {
+            padding: 15px;
+            color: #555;
+        }
+        .message-box-footer {
+            padding: 10px 15px;
+            border-top: 1px solid #eee;
+            text-align: right;
+        }
+        .message-box-ok-button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .message-box-ok-button:hover {
+            background-color: #2563eb;
+        }
+        .message-box-danger .message-box-header { background-color: #fee2e2; }
+        .message-box-danger .message-box-header h3, .message-box-danger .message-box-body { color: #dc2626; }
+        .message-box-danger .message-box-ok-button { background-color: #dc2626; }
+        .message-box-danger .message-box-ok-button:hover { background-color: #b91c1c; }
+
+        .message-box-success .message-box-header { background-color: #d1fae5; }
+        .message-box-success .message-box-header h3, .message-box-success .message-box-body { color: #059669; }
+        .message-box-success .message-box-ok-button { background-color: #10b981; }
+        .message-box-success .message-box-ok-button:hover { background-color: #047857; }
+
+        .message-box-warning .message-box-header { background-color: #fff3cd; }
+        .message-box-warning .message-box-header h3, .message-box-warning .message-box-body { color: #b45309; }
+        .message-box-warning .message-box-ok-button { background-color: #f59e0b; }
+        .message-box-warning .message-box-ok-button:hover { background-color: #d97706; }
+    </style>
+
     {% block head_extra %}{% endblock %}
 </head>
 <body>
@@ -17,14 +344,15 @@
             </a>
             <a href="{{ url_for('home') }}" class="nav-link {% if active_page == 'home' %}active{% endif %}">Home</a>
             <a href="{{ url_for('patients') }}" class="nav-link {% if active_page == 'patients' %}active{% endif %}">Pasien</a>
+            <a href="{{ url_for('scoreboard') }}" class="nav-link {% if active_page == 'scoreboard' %}active{% endif %}">Peringkat</a> {# NEW: Link ke halaman scoreboard #}
         </div>
         <div class="navbar-right">
             <span class="user-greeting">Halo, {{ session.user_info.nama_lengkap if session.get('user_info') and session.user_info.nama_lengkap else (session.user_info.username if session.get('user_info') and session.user_info.username else 'Terapis') }}</span>
-            <img src="{{ session.user_info.url_foto_profil if session.get('user_info') and session.user_info.url_foto_profil else url_for('static', filename='img/terapis_profile.jpg') }}" 
-                alt="Profil Terapis" 
-                class="profile-pic" 
+            <img src="{{ session.user_info.url_foto_profil if session.get('user_info') and session.user_info.url_foto_profil else url_for('static', filename='img/terapis_profile.jpg') }}"
+                alt="Profil Terapis"
+                class="profile-pic"
                 onerror="this.onerror=null; this.src='https://placehold.co/40x40/e2e8f0/333333?text=P';this.alt='User';">
-            <a href="{{ url_for('logout') }}" 
+            <a href="{{ url_for('logout') }}"
                 class="button logout-button bg-red-500 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-md text-sm transition-colors duration-150">
                 Logout
             </a>
@@ -36,12 +364,12 @@
             {% if messages %}
                 <div class="flash-messages-container mb-4">
                     {% for category, message in messages %}
-                        <div class="flash-message {{ category }} p-3 my-2 rounded-md text-sm border 
-                                        {% if category == 'success' %} bg-green-100 border-green-400 text-green-700 
-                                        {% elif category == 'danger' or category == 'error' %} bg-red-100 border-red-400 text-red-700 
-                                        {% elif category == 'warning' %} bg-yellow-100 border-yellow-400 text-yellow-700 
-                                        {% else %} bg-blue-100 border-blue-400 text-blue-700 {% endif %}"
-                                    role="alert">
+                        <div class="flash-message {{ category }} p-3 my-2 rounded-md text-sm border
+                                             {% if category == 'success' %} bg-green-100 border-green-400 text-green-700
+                                             {% elif category == 'danger' or category == 'error' %} bg-red-100 border-red-400 text-red-700
+                                             {% elif category == 'warning' %} bg-yellow-100 border-yellow-400 text-yellow-700
+                                             {% else %} bg-blue-100 border-blue-400 text-blue-700 {% endif %}"
+                                        role="alert">
                                 {{ message }}
                         </div>
                     {% endfor %}
@@ -58,6 +386,486 @@
         <p>&copy; {{ now.year if now else '2025' }} RESTRO Rehabilitasi. Hak Cipta Dilindungi.</p>
     </footer>
 
+    <!-- Tombol Chat Floating -->
+    <div id="chatToggleButton" class="chat-toggle-button">
+        <i class="fa-solid fa-comments"></i>
+        <span class="ml-2">Chat</span>
+    </div>
+
+    <!-- Container Chat Utama -->
+    <div id="chatContainer" class="chat-container">
+        <!-- Contact List View (initial view) -->
+        <div id="chatContactsView" class="chat-contacts-view">
+            <div class="chat-header">
+                <span>Daftar Pasien</span>
+                <button class="close-btn" id="closeContactListBtn">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div id="chatContactsList" class="chat-contacts-list">
+                <p class="text-center text-gray-500 italic py-4">Memuat daftar pasien...</p>
+            </div>
+        </div>
+
+        <!-- Individual Chat View (hidden by default) -->
+        <div id="individualChatArea" class="chat-area">
+            <div class="chat-header">
+                <button class="close-btn" id="backToContactListBtn">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <span id="currentChatPatientName">Nama Pasien</span>
+                <button class="close-btn" id="closeIndividualChatBtn">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div id="chatMessages" class="chat-messages">
+                <!-- Pesan chat akan dimuat di sini -->
+            </div>
+            <div class="chat-input">
+                <button class="icon-btn" aria-label="Emoji">
+                    <i class="fa-regular fa-face-smile"></i>
+                </button>
+                <input type="text" id="messageInput" placeholder="Ketik pesan..." onkeypress="handleKeyPress(event)">
+                <button class="icon-btn" aria-label="Microphone">
+                    <i class="fa-solid fa-microphone"></i>
+                </button>
+                <button id="sendMessageButton">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import Firebase SDKs
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { FirebaseError } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+
+        // =========================================================
+        //                 KONFIGURASI FIREBASE
+        // =========================================================
+        // Variabel ini akan di-inject oleh Flask dari app.py
+        const appId = "{{ app_id | default('default-app-id') }}";
+        const firebaseConfig = JSON.parse('{{ firebase_config_json | default("{}") | safe }}');
+        const initialAuthToken = "{{ firebase_custom_token | default('') }}";
+
+        // Inisialisasi Firebase
+        let app;
+        let db;
+        let auth;
+        let userId = null; // ID pengguna yang login (terapis)
+        let isAuthReady = false;
+        let currentMessageUnsubscribe = null; // Variabel untuk menyimpan fungsi unsubscribe Firestore
+
+        // =========================================================
+        //                 Elemen UI
+        // =========================================================
+        const chatToggleButton = document.getElementById('chatToggleButton');
+        const chatContainer = document.getElementById('chatContainer');
+        const chatContactsView = document.getElementById('chatContactsView'); // Element untuk tampilan daftar kontak
+        const chatContactsList = document.getElementById('chatContactsList'); // Konten daftar kontak
+        const individualChatArea = document.getElementById('individualChatArea');
+        const currentChatPatientName = document.getElementById('currentChatPatientName');
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendMessageButton = document.getElementById('sendMessageButton');
+
+        // Tombol Back dan Close
+        const closeContactListBtn = document.getElementById('closeContactListBtn');
+        const backToContactListBtn = document.getElementById('backToContactListBtn');
+        const closeIndividualChatBtn = document.getElementById('closeIndividualChatBtn');
+
+
+        let currentChatRoomId = null;
+        let currentPatientId = null;
+        let currentPatientName = '';
+
+        // =========================================================
+        //                 FUNGSI UTILITY
+        // =========================================================
+
+        // Fungsi untuk menampilkan custom message box (pengganti alert)
+        // Dibuat global agar bisa diakses dari script di halaman yang meng-extend base.html
+        window.showCustomMessageBox = function(title, message, type = 'info') {
+            const messageBox = document.createElement('div');
+            messageBox.classList.add('custom-message-box', `message-box-${type}`);
+            messageBox.innerHTML = `
+                <div class="message-box-header">
+                    <h3>${title}</h3>
+                    <span class="close-message-box">&times;</span>
+                </div>
+                <div class="message-box-body">
+                    <p>${message}</p>
+                </div>
+                <div class="message-box-footer">
+                    <button class="message-box-ok-button">OK</button>
+                </div>
+            `;
+            document.body.appendChild(messageBox);
+
+            messageBox.style.top = '50%';
+            messageBox.style.left = '50%';
+            messageBox.style.transform = 'translate(-50%, -50%)';
+            messageBox.style.display = 'flex';
+
+            messageBox.querySelector('.close-message-box').addEventListener('click', () => {
+                document.body.removeChild(messageBox);
+            });
+            messageBox.querySelector('.message-box-ok-button').addEventListener('click', () => {
+                document.body.removeChild(messageBox);
+            });
+        }
+
+        // Fungsi untuk mengelola tampilan chat (buka/tutup)
+        function toggleChat() {
+            chatContainer.classList.toggle('open');
+            if (!chatContainer.classList.contains('open')) {
+                // Jika chat ditutup, pastikan kita kembali ke tampilan daftar kontak
+                showContactList();
+            }
+        }
+
+        // Fungsi untuk menampilkan daftar kontak dan menyembunyikan chat individual
+        function showContactList() {
+            // Hentikan listener pesan sebelumnya jika ada
+            if (currentMessageUnsubscribe) {
+                currentMessageUnsubscribe();
+                currentMessageUnsubscribe = null;
+            }
+
+            // Tampilkan daftar kontak dan sembunyikan chat individu
+            chatContactsView.style.display = 'flex';
+            individualChatArea.style.display = 'none';
+
+            // Reset highlight kontak yang dipilih
+            document.querySelectorAll('.contact-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            currentChatRoomId = null;
+            currentPatientId = null;
+            currentPatientName = '';
+            chatMessages.innerHTML = ''; // Kosongkan pesan saat kembali ke daftar kontak
+        }
+
+        // Fungsi untuk menampilkan area chat individual
+        async function openChat(patientId, patientName, photoUrl) {
+            if (!isAuthReady) {
+                window.showCustomMessageBox("Autentikasi Belum Siap", "Sistem chat sedang dalam proses autentikasi. Mohon tunggu sebentar.");
+                return;
+            }
+
+            const sortedIds = [userId, patientId].sort();
+            currentChatRoomId = `chat_terapis_pasien_${sortedIds[0]}_${sortedIds[1]}`;
+
+            currentPatientId = patientId;
+            currentPatientName = patientName;
+            currentChatPatientName.textContent = patientName;
+
+            // Sembunyikan daftar kontak dan tampilkan chat individu
+            chatContactsView.style.display = 'none';
+            individualChatArea.style.display = 'flex';
+
+            chatMessages.innerHTML = '<div class="text-center text-gray-500 italic py-4">Memuat pesan...</div>';
+
+            document.querySelectorAll('.contact-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            const activeContact = document.querySelector(`.contact-item[data-patient-id="${patientId}"]`);
+            if (activeContact) {
+                activeContact.classList.add('active');
+            }
+
+            listenForMessages(currentChatRoomId);
+        }
+
+        // Fungsi untuk merender pesan ke UI
+        function renderMessage(messageData) {
+            const messageBubble = document.createElement('div');
+            const timestamp = document.createElement('div');
+
+            messageBubble.classList.add('message-bubble');
+            timestamp.classList.add('message-timestamp');
+
+            const messageText = messageData.text || '';
+            const messageSender = messageData.sender_id === userId ? 'outgoing' : 'incoming';
+            const messageTime = messageData.timestamp && messageData.timestamp.seconds ?
+                                 new Date(messageData.timestamp.seconds * 1000).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
+
+            messageBubble.classList.add(`message-${messageSender}`);
+            messageBubble.textContent = messageText;
+            timestamp.textContent = messageTime;
+
+            // Masukkan pesan ke dalam chatMessages
+            chatMessages.appendChild(messageBubble);
+            chatMessages.appendChild(timestamp);
+
+            // Scroll ke bawah secara otomatis hanya jika kita sudah di dekat bagian bawah
+            // atau jika ini adalah pesan yang baru dikirim oleh user sendiri
+            const isScrolledToBottom = chatMessages.scrollHeight - chatMessages.clientHeight <= chatMessages.scrollTop + 50;
+            if (isScrolledToBottom || messageSender === 'outgoing') {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        }
+
+        // Fungsi untuk mengirim pesan
+        async function sendMessage() {
+            const messageText = messageInput.value.trim();
+            if (messageText === "" || !currentChatRoomId || !userId) {
+                return;
+            }
+
+            try {
+                const messagesColRef = collection(db, `artifacts/${appId}/public/data/chat_rooms/${currentChatRoomId}/messages`);
+
+                await addDoc(messagesColRef, {
+                    text: messageText,
+                    sender_id: userId,
+                    recipient_id: currentPatientId,
+                    timestamp: serverTimestamp()
+                });
+                messageInput.value = '';
+                // Scroll to bottom immediately after sending a message
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            } catch (e) {
+                console.error("Error sending message: ", e);
+                window.showCustomMessageBox("Error Mengirim Pesan", `Gagal mengirim pesan. Detail: ${e.message || e.code || e}`);
+            }
+        }
+
+        // Event listener untuk tombol kirim
+        sendMessageButton.addEventListener('click', sendMessage);
+
+        // Event listener untuk Enter di input pesan
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+                event.preventDefault();
+            }
+        }
+
+        // Fungsi untuk mendengarkan pesan real-time dari Firestore
+        function listenForMessages(chatRoomId) {
+            if (!db) {
+                console.error("Firestore is not initialized.");
+                return;
+            }
+
+            // Hentikan listener sebelumnya jika ada
+            if (currentMessageUnsubscribe) {
+                currentMessageUnsubscribe();
+            }
+
+            const messagesColRef = collection(db, `artifacts/${appId}/public/data/chat_rooms/${chatRoomId}/messages`);
+            // Order by timestamp ascending for real-time.
+            const q = query(messagesColRef, orderBy("timestamp", "asc"));
+
+            chatMessages.innerHTML = '<div class="text-center text-gray-500 italic py-4">Memuat pesan...</div>'; // Tampilkan pesan loading
+
+            currentMessageUnsubscribe = onSnapshot(q, (snapshot) => {
+                // Hapus pesan loading setelah data pertama kali datang
+                if (chatMessages.innerHTML.includes('Memuat pesan...')) {
+                    chatMessages.innerHTML = '';
+                }
+
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === "added") {
+                        // Selalu append untuk pesan baru, karena flex-direction: column sekarang
+                        renderMessage(change.doc.data());
+                    }
+                    // Anda bisa menambahkan logika untuk 'modified' atau 'removed' jika diperlukan
+                });
+
+                // Pastikan selalu scroll ke bawah setelah setiap pembaruan
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            }, (error) => {
+                console.error("Error listening to messages:", error);
+                let errorMessage = "Gagal memuat pesan chat.";
+                if (error instanceof FirebaseError) {
+                    if (error.code === 'permission-denied') {
+                        errorMessage = "Akses ditolak: Pastikan aturan keamanan Firestore Anda mengizinkan baca/tulis untuk chat rooms.";
+                    } else if (error.code === 'unavailable') {
+                        errorMessage = "Koneksi terputus: Server Firebase mungkin tidak dapat dijangkau.";
+                    } else if (error.code === 'unauthenticated') {
+                        errorMessage = "Tidak terautentikasi: Sesi Firebase Anda mungkin tidak valid.";
+                    }
+                    errorMessage += ` (Kode: ${error.code})`;
+                } else {
+                    errorMessage += ` Detail: ${error.message || error}`;
+                }
+                window.showCustomMessageBox("Error Memuat Pesan", errorMessage);
+            });
+        }
+
+
+        // =========================================================
+        //                 Inisialisasi Firebase & Autentikasi
+        // =========================================================
+        async function initializeFirebaseAndAuth() {
+            try {
+                // Pastikan firebaseConfig tidak kosong
+                if (Object.keys(firebaseConfig).length === 0) {
+                    console.error("Firebase config is empty. Cannot initialize Firebase.");
+                    window.showCustomMessageBox("Error Konfigurasi Firebase", "Konfigurasi Firebase kosong. Silakan periksa pengaturan backend Anda.");
+                    return;
+                }
+
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        isAuthReady = true;
+                        console.log("Firebase Auth ready. User ID:", userId);
+                        fetchPatientList();
+                    } else {
+                        try {
+                            if (initialAuthToken) {
+                                await signInWithCustomToken(auth, initialAuthToken);
+                                console.log("Signed in with custom token.");
+                            } else {
+                                await signInAnonymously(auth);
+                                console.log("Signed in anonymously.");
+                            }
+                        } catch (error) {
+                            console.error("Error signing in:", error);
+                            let errorMessage = "Gagal melakukan autentikasi dengan Firebase.";
+                            if (error instanceof FirebaseError) {
+                                if (error.code === 'auth/invalid-custom-token') {
+                                    errorMessage = "Token kustom Firebase tidak valid. Pastikan token dibuat dengan benar di backend Flask dan konfigurasi Admin SDK sudah benar.";
+                                } else if (error.code === 'auth/network-request-failed') {
+                                    errorMessage = "Gagal koneksi ke server autentikasi Firebase. Periksa koneksi internet Anda.";
+                                } else if (error.code === 'auth/user-disabled') {
+                                    errorMessage = "Akun pengguna Firebase telah dinonaktifkan.";
+                                }
+                                errorMessage += ` (Kode: ${error.code})`;
+                            } else {
+                                errorMessage += ` Detail: ${error.message || error}`;
+                            }
+                            window.showCustomMessageBox("Error Autentikasi Firebase", errorMessage);
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Error initializing Firebase:", error);
+                let errorMessage = "Gagal menginisialisasi Firebase SDK.";
+                if (error instanceof FirebaseError) {
+                    if (error.code === 'app/invalid-config') {
+                        errorMessage = "Konfigurasi Firebase tidak valid. Pastikan semua nilai di FIREBASE_CLIENT_CONFIG di app.py sudah benar.";
+                    }
+                    errorMessage += ` (Kode: ${error.code})`;
+                } else {
+                    errorMessage += ` Detail: ${error.message || error}`;
+                }
+                window.showCustomMessageBox("Error Inisialisasi Firebase", errorMessage);
+            }
+        }
+
+        // =========================================================
+        //                 MEMUAT DATA PASIEN (KONTAK CHAT)
+        // =========================================================
+        async function fetchPatientList() {
+            try {
+                // Ubah URL ini untuk memanggil rute proxy Flask yang baru
+                const response = await fetch('/api/patients_for_chat', {
+                    method: 'GET',
+                    headers: {
+                        // Tidak perlu mengirimkan Authorization header di sini, Flask backend yang akan menanganinya
+                        // 'Authorization': `Bearer ${getSessionToken()}`
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    try {
+                        const errorData = JSON.parse(errorText);
+                        throw new Error(errorData.error || `Error API: ${response.status}`);
+                    } catch (jsonError) {
+                        throw new Error(`Non-JSON response (Status: ${response.status}): ${errorText.substring(0, 100)}...`);
+                    }
+                }
+
+                const patients = await response.json();
+                renderPatientContacts(patients);
+            } catch (error) {
+                console.error("Error fetching patient list:", error);
+                let errorMessage = "Gagal memuat daftar pasien untuk chat.";
+                if (error.message && error.message.includes('Non-JSON response')) {
+                    errorMessage = `Terjadi kesalahan di server backend Flask (Proxy). Detail: ${error.message}`;
+                } else if (error.message && error.message.includes('Unauthorized')) {
+                    errorMessage += " Autentikasi ke Flask backend gagal (401 Unauthorized). Silakan login ulang.";
+                } else if (error.message && error.message.includes('404')) {
+                    errorMessage = "Endpoint daftar pasien tidak ditemukan (404 Not Found) di Flask backend (Proxy).";
+                }
+                else {
+                    errorMessage += ` Detail: ${error.message || error}`;
+                }
+                window.showCustomMessageBox("Error Memuat Daftar Pasien", errorMessage);
+                chatContactsList.innerHTML = '<p class="text-center py-4 text-gray-500 italic">Gagal memuat daftar pasien.</p>';
+            }
+        }
+
+        // Helper untuk mendapatkan token dari sesi (mengambil dari meta tag)
+        function getSessionToken() {
+            const tokenMeta = document.querySelector('meta[name="access-token"]');
+            if (tokenMeta) {
+                return tokenMeta.content;
+            }
+            return "";
+        }
+
+        // Fungsi untuk merender daftar pasien ke UI kontak chat
+        function renderPatientContacts(patients) {
+            chatContactsList.innerHTML = ''; // Kosongkan placeholder "Memuat daftar pasien..."
+            if (patients && patients.length > 0) {
+                patients.forEach(patient => {
+                    const patientId = patient.id; // Gunakan ID yang diformat dari Flask
+                    const patientName = patient.name;
+                    const patientPhoto = patient.photo_url; // Gunakan photo_url yang diformat dari Flask
+
+                    const contactItem = document.createElement('div');
+                    contactItem.classList.add('contact-item');
+                    contactItem.dataset.patientId = patientId;
+                    contactItem.dataset.patientName = patientName;
+                    contactItem.dataset.patientPhoto = patientPhoto;
+
+                    contactItem.innerHTML = `
+                        <img src="${patientPhoto}" alt="Avatar" class="contact-avatar" onerror="this.onerror=null;this.src='https://placehold.co/40x40/e2e8f0/333333?text=${patientName.charAt(0)}'">
+                        <div>
+                            <div class="contact-name">${patientName}</div>
+                            <!-- <div class="contact-last-message">Pesan terakhir...</div> Contoh, nanti diisi dari Firebase -->
+                        </div>
+                    `;
+                    contactItem.addEventListener('click', () => openChat(patientId, patientName, patientPhoto));
+                    chatContactsList.appendChild(contactItem);
+                });
+            } else {
+                chatContactsList.innerHTML = '<p class="text-center py-4 text-gray-500 italic">Tidak ada pasien yang tersedia untuk chat.</p>';
+            }
+        }
+
+        // =========================================================
+        //                 EVENT LISTENERS
+        // =========================================================
+        chatToggleButton.addEventListener('click', toggleChat);
+
+        // Menambahkan event listener untuk tombol back dan close
+        closeContactListBtn.addEventListener('click', toggleChat); // Tombol silang di daftar kontak
+        backToContactListBtn.addEventListener('click', showContactList); // Tombol panah kembali di chat individual
+        closeIndividualChatBtn.addEventListener('click', toggleChat); // Tombol silang di chat individual
+
+
+        // =========================================================
+        //                 Inisialisasi Saat Halaman Dimuat
+        // =========================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeFirebaseAndAuth();
+        });
+    </script>
     {% block scripts_extra %}{% endblock %}
 </body>
 </html>

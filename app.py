@@ -1,19 +1,64 @@
 # Website-Monitoring/app.py
+# PERUBAHAN: Menambahkan total_points ke data pasien di berbagai endpoint frontend.
+# PERUBAHAN: Mengganti dummy data leaderboard dengan panggilan API nyata.
+# PERUBAHAN: Menambahkan endpoint untuk manajemen badge (create, update, delete).
+# PERBAIKAN: Mengatasi AttributeError: 'NoneType' object has no attribute 'get' pada highest_badge_info.
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 import requests
 import json
 from datetime import date, datetime
 
+# --- Import Firebase Admin SDK ---
+import firebase_admin
+from firebase_admin import credentials, auth
+from firebase_admin.auth import UserNotFoundError # Import spesifik untuk menangani error user tidak ditemukan
+import os 
+
 app = Flask(__name__)
 # GANTI INI DENGAN KUNCI RAHASIA YANG KUAT DAN UNIK UNTUK APLIKASI WEBSITE ANDA!
 app.secret_key = 'website_monitoring_super_secret_key_CHANGE_ME_PLEASE_AGAIN' 
 
+# --- Konfigurasi Firebase Admin SDK ---
+# Anda harus mengganti 'path/to/your/firebase-adminsdk.json' dengan jalur sebenarnya
+# ke file kunci akun layanan Firebase Anda.
+# File ini berisi kredensial yang aman untuk Firebase Admin SDK.
+# DISARANKAN: Simpan path ini di environment variable (misal: FIREBASE_ADMIN_SDK_PATH)
+FIREBASE_ADMIN_SDK_PATH = os.getenv('FIREBASE_ADMIN_SDK_PATH', 'config/restro-62e50-firebase-adminsdk-fbsvc-d9b80ccd3c.json') 
+
+try:
+    if not firebase_admin._apps:
+        cred = credentials.Certificate(FIREBASE_ADMIN_SDK_PATH)
+        firebase_admin.initialize_app(cred)
+    print("Firebase Admin SDK initialized successfully.")
+except Exception as e:
+    print(f"Error initializing Firebase Admin SDK: {e}")
+    # Tangani error inisialisasi Admin SDK sesuai kebutuhan produksi Anda
+    pass
+
+
 # --- Konfigurasi untuk API Backend BE-RESTRO ---
 API_BASE_URL = "https://be-restro-api-fnfpghddbka7d4aw.eastasia-01.azurewebsites.net"
 
+# --- Konfigurasi Firebase Client-Side (Client-side Firebase SDK) ---
+# Ini adalah konfigurasi yang akan dikirim ke frontend.
+# Anda bisa menemukannya di Firebase Console -> Project settings -> General -> Your apps -> Firebase SDK snippet (Config)
+FIREBASE_CLIENT_CONFIG = {
+    "apiKey": "AIzaSyBpV6OnjPFLzvVT15ByrvaeL9K3NLwyp_8",
+    "authDomain": "restro-62e50.firebaseapp.com",
+    "projectId": "restro-62e50",
+    "storageBucket": "restro-62e50.firebasestorage.app",
+    "messagingSenderId": "923846485510",
+    "appId": "1:923846485510:web:179847d92b5fbc7438c587",
+    "measurementId": "G-14V1KJ7S63"
+}
+
+
 # --- Fungsi Helper untuk Request ke API Backend ---
 def api_request(method, endpoint, data=None, params=None, files=None, use_token=True):
+    """
+    Melakukan permintaan ke API backend BE-RESTRO.
+    """
     headers = {}
     if use_token:
         token = session.get('access_token')
@@ -24,8 +69,7 @@ def api_request(method, endpoint, data=None, params=None, files=None, use_token=
     
     try:
         if files:
-            # requests will automatically set Content-Type: multipart/form-data for files
-            # and handle the encoding. Do not set 'Content-Type': 'application/json' for files.
+            # requests akan secara otomatis mengatur Content-Type: multipart/form-data untuk files
             response = requests.request(method.upper(), url, headers=headers, data=data, files=files, params=params, timeout=20)
         else:
             if data is not None:
@@ -35,7 +79,7 @@ def api_request(method, endpoint, data=None, params=None, files=None, use_token=
         response.raise_for_status()
 
         if not response.content:
-             return {"msg": "Operasi berhasil, tidak ada konten balasan."}, response.status_code, response.headers
+            return {"msg": "Operasi berhasil, tidak ada konten balasan."}, response.status_code, response.headers
 
         json_response = response.json()
         return json_response, response.status_code, response.headers
@@ -52,21 +96,36 @@ def api_request(method, endpoint, data=None, params=None, files=None, use_token=
 
 # --- Fungsi Helper Autentikasi ---
 def is_logged_in():
+    """
+    Memeriksa apakah pengguna sedang login.
+    """
     return 'access_token' in session and 'user_info' in session
 
 def get_current_user_info():
+    """
+    Mendapatkan informasi pengguna yang sedang login dari sesi.
+    """
     return session.get('user_info', {})
 
 def get_current_user_role():
+    """
+    Mendapatkan peran pengguna yang sedang login.
+    """
     return get_current_user_info().get('role')
 
 def get_current_user_name():
+    """
+    Mendapatkan nama lengkap atau username pengguna yang sedang login.
+    """
     user_info = get_current_user_info()
     return user_info.get('nama_lengkap', user_info.get('username', 'Terapis'))
 
 # --- Filter Jinja untuk Format Tanggal ---
 @app.template_filter('format_date_id')
 def format_date_filter_jinja(value, format='%d %B %Y'):
+    """
+    Filter Jinja untuk memformat string tanggal ke format Indonesia.
+    """
     if not value: return 'N/A'
     try:
         if isinstance(value, str):
@@ -87,18 +146,28 @@ def format_date_filter_jinja(value, format='%d %B %Y'):
 # --- Context Processor untuk Variabel Global di Template ---
 @app.context_processor
 def inject_now():
+    """
+    Menginjeksikan objek datetime.utcnow() ke semua template sebagai 'now'.
+    """
     return {'now': datetime.utcnow()}
 
 # --- Rute Aplikasi Website ---
 
 @app.route('/')
 def index():
+    """
+    Rute utama, mengarahkan ke halaman home jika sudah login sebagai terapis,
+    jika tidak, mengarahkan ke halaman login.
+    """
     if is_logged_in() and get_current_user_role() == 'terapis':
         return redirect(url_for('home'))
     return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    """
+    Rute untuk halaman login terapis.
+    """
     if is_logged_in() and get_current_user_role() == 'terapis':
         return redirect(url_for('home'))
 
@@ -116,8 +185,44 @@ def login():
         if status_code == 200 and isinstance(api_response, dict) and 'access_token' in api_response:
             session['access_token'] = api_response['access_token']
             session['user_info'] = api_response.get('user', {}) 
-            session['logged_in'] = True # Tambahkan baris ini untuk mengatur session.logged_in
-            print(f"DEBUG (Login Success): Session content after successful login: {dict(session)}") # Debugging print
+            session['logged_in'] = True
+            
+            # --- Firebase Custom Token Generation & User Management ---
+            terapis_id_from_backend = session['user_info'].get('id') 
+            if terapis_id_from_backend:
+                uid_str = str(terapis_id_from_backend) 
+                try:
+                    user = auth.get_user(uid_str)
+                    print(f"Firebase user with UID {uid_str} already exists.")
+                except UserNotFoundError:
+                    try:
+                        user = auth.create_user(uid=uid_str, display_name=session['user_info'].get('nama_lengkap'), email=session['user_info'].get('email'))
+                        print(f"Successfully created new Firebase user with UID: {user.uid}")
+                    except Exception as e:
+                        print(f"ERROR: Failed to create Firebase user with UID {uid_str}: {e}")
+                        flash("Gagal membuat pengguna Firebase. Fitur chat mungkin tidak berfungsi.", "warning")
+                        user = None 
+                except Exception as e:
+                    print(f"ERROR: Failed to fetch Firebase user {uid_str}: {e}")
+                    flash("Gagal memverifikasi pengguna Firebase. Fitur chat mungkin tidak berfungsi.", "warning")
+                    user = None
+
+                if user: 
+                    try:
+                        firebase_custom_token = auth.create_custom_token(user.uid) 
+                        session['firebase_custom_token'] = firebase_custom_token.decode('utf-8') 
+                        print(f"Firebase Custom Token generated for UID: {user.uid}")
+                    except Exception as e:
+                        print(f"ERROR: Failed to generate Firebase custom token for UID {user.uid}: {e}")
+                        flash("Gagal menghasilkan token chat. Fitur chat mungkin tidak berfungsi.", "warning")
+                else: 
+                    flash("Tidak dapat menyiapkan Firebase Auth untuk chat. Silakan hubungi admin.", "warning")
+            else:
+                print("WARNING: Terapis ID not found in session user info. Cannot generate Firebase custom token.")
+                flash("ID terapis tidak ditemukan. Fitur chat mungkin tidak berfungsi.", "warning")
+            # --- End Firebase Custom Token Generation & User Management ---
+
+            print(f"Login successful for {session['user_info'].get('username')}")
             flash('Login berhasil!', 'success')
             return redirect(url_for('home'))
         else:
@@ -127,7 +232,7 @@ def login():
             else: 
                 error_msg += f"Tidak dapat memproses respons dari server. (Status: {status_code})"
             flash(error_msg, 'danger')
-            print(f"DEBUG (Login Failed): API Response: {api_response}, Status Code: {status_code}") # Debugging print
+            print(f"Login failed: API Response: {api_response}, Status Code: {status_code}")
             return render_template('login.html', error=error_msg)
             
     return render_template('login.html')
@@ -135,11 +240,10 @@ def login():
 
 @app.route('/home')
 def home():
-    # --- DEBUGGING: Cetak status sesi saat mengakses /home ---
-    print(f"DEBUG (/home accessed): is_logged_in() = {is_logged_in()}, session.get('logged_in') = {session.get('logged_in')}, session.get('user_info') = {session.get('user_info') is not None}")
-    print(f"DEBUG (/home accessed): Full session content: {dict(session)}")
-    # --- AKHIR DEBUGGING ---
-
+    """
+    Rute untuk halaman dashboard terapis (home).
+    Menampilkan ringkasan KPI dan program terbaru.
+    """
     if not is_logged_in() or get_current_user_role() != 'terapis':
         flash("Sesi tidak valid atau Anda bukan terapis. Silakan login kembali.", "warning")
         return redirect(url_for('login'))
@@ -148,7 +252,6 @@ def home():
     
     dashboard_data_resp, status_code, _ = api_request('GET', '/api/terapis/dashboard-summary')
     
-    # Initialize with default values
     kpi_data = {
         "pasien_rehabilitasi_hari_ini": 0,
         "pasien_selesai_rehabilitasi_hari_ini": 0,
@@ -162,28 +265,27 @@ def home():
         programs_for_display_home_raw = dashboard_data_resp.get('program_terbaru_terapis', [])
         
         for p_data in programs_for_display_home_raw:
-             # Ensure program.id and program.patient_id are integers, with fallback to 0
-             program_id = p_data.get('id')
-             patient_id_for_program = p_data.get('patient_id')
-             
-             try:
-                 program_id = int(program_id) if program_id is not None else 0
-                 patient_id_for_program = int(patient_id_for_program) if patient_id_for_program is not None else 0
-             except (ValueError, TypeError):
-                 program_id = 0
-                 patient_id_for_program = 0
+            program_id = p_data.get('id')
+            patient_id_for_program = p_data.get('patient_id')
+            
+            try:
+                program_id = int(program_id) if program_id is not None else 0
+                patient_id_for_program = int(patient_id_for_program) if patient_id_for_program is not None else 0
+            except (ValueError, TypeError):
+                program_id = 0
+                patient_id_for_program = 0
 
-             programs_for_display_home.append({
-                 'id': program_id, 
-                 'program_name': p_data.get('program_name'), # Corrected key
-                 'patient_name': p_data.get('patient_name'), # Corrected key
-                 'patient_id': patient_id_for_program, # Corrected key
-                 'execution_date': p_data.get('execution_date'), # Corrected key
-                 'status': p_data.get('status'),
-                 'movements_details': p_data.get('movements_details', []) # Pass full movements_details
-             })
+            programs_for_display_home.append({
+                'id': program_id, 
+                'program_name': p_data.get('program_name'),
+                'patient_name': p_data.get('patient_name'),
+                'patient_id': patient_id_for_program,
+                'execution_date': p_data.get('execution_date'),
+                'status': p_data.get('status'),
+                'movements_details': p_data.get('movements_details', [])
+            })
 
-        statistik_bulanan = dashboard_data_resp.get('chart_data_patients_per_day', {}) # Use chart_data_patients_per_day as per API response
+        statistik_bulanan = dashboard_data_resp.get('chart_data_patients_per_day', {})
         chart_data_patients_per_month['labels'] = statistik_bulanan.get('labels', [])
         chart_data_patients_per_month['data'] = statistik_bulanan.get('data', [])
     else:
@@ -197,12 +299,11 @@ def home():
         
         flash(f"Gagal mengambil data dashboard terapis: {str(error_message_from_api)}", "warning")
 
-    # Map KPI data to more readable names for the template
     total_patients_handled = kpi_data.get('total_pasien_ditangani', 0)
     total_patients_rehab_today = kpi_data.get('pasien_rehabilitasi_hari_ini', 0)
     count_patients_completed_rehab = kpi_data.get('pasien_selesai_rehabilitasi_hari_ini', 0)
 
-
+    # Pass Firebase config and custom token to template
     return render_template(
         'home.html',
         username=user_info.get('nama_lengkap', user_info.get('username')),
@@ -211,16 +312,53 @@ def home():
         total_patients_rehab_today=total_patients_rehab_today,
         count_patients_completed_rehab=count_patients_completed_rehab,
         therapist_programs=programs_for_display_home, 
-        chart_data_patients_per_month_json=json.dumps(chart_data_patients_per_month)
+        chart_data_patients_per_month_json=json.dumps(chart_data_patients_per_month),
+        firebase_config_json=json.dumps(FIREBASE_CLIENT_CONFIG),
+        firebase_custom_token=session.get('firebase_custom_token'),
+        app_id=app.name
     )
+
+# --- NEW ROUTE: API Endpoint for Frontend to Get Patient List for Chat ---
+@app.route('/api/patients_for_chat', methods=['GET'])
+def get_patients_for_chat_api():
+    """
+    Rute API untuk frontend mengambil daftar pasien untuk fitur chat.
+    Memanggil API backend untuk mendapatkan data pasien.
+    """
+    if not is_logged_in() or get_current_user_role() != 'terapis':
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    # Memanggil API backend eksternal menggunakan helper api_request yang sudah ada
+    response_data, status_code, headers = api_request('GET', '/api/program/pasien-list')
+
+    if status_code == 200 and isinstance(response_data, list):
+        # Memformat data pasien sesuai kebutuhan UI chat frontend
+        formatted_patients = []
+        for p in response_data:
+            patient_id = p.get('id') or p.get('user_id') # Ambil ID pasien
+            patient_name = p.get('nama') or p.get('nama_lengkap') or 'Nama Tidak Dikenal'
+            foto_display_src = p.get('foto_url') or p.get('foto_filename') 
+            if not (foto_display_src and (foto_display_src.startswith('http://') or foto_display_src.startswith('https://'))):
+                foto_display_src = url_for('static', filename='img/default_avatar.png')
+
+            formatted_patients.append({
+                'id': patient_id,
+                'name': patient_name,
+                'photo_url': foto_display_src, # Menggunakan photo_url agar konsisten dengan frontend
+                'total_points': p.get('total_points', 0) # Menambahkan total_points
+            })
+        return jsonify(formatted_patients), 200
+    else:
+        # Menangani kasus di mana API eksternal mengembalikan error atau data non-list
+        error_msg = response_data.get('msg', response_data.get('error', 'Gagal mengambil daftar pasien dari API eksternal.'))
+        return jsonify({"error": error_msg, "status_code": status_code}), status_code
+
 
 @app.route('/patients')
 def patients(): 
-    # --- DEBUGGING: Cetak status sesi saat mengakses /patients ---
-    print(f"DEBUG (/patients accessed): is_logged_in() = {is_logged_in()}, session.get('logged_in') = {session.get('logged_in')}, session.get('user_info') = {session.get('user_info') is not None}")
-    print(f"DEBUG (/patients accessed): Full session content: {dict(session)}")
-    # --- AKHIR DEBUGGING ---
-
+    """
+    Rute untuk halaman daftar pasien.
+    """
     if not is_logged_in() or get_current_user_role() != 'terapis':
         return redirect(url_for('login'))
 
@@ -253,15 +391,23 @@ def patients():
         error_detail = response_data.get('error', 'Tidak diketahui') if isinstance(response_data, dict) else "Respons API tidak valid"
         flash(f"Gagal mengambil daftar pasien. Status: {status_code}, Detail: {str(error_detail)}", 'danger')
 
-    return render_template('patients.html', patients=patient_list_from_api, username=get_current_user_name(), active_page='patients')
+    # Pass Firebase config and custom token to template
+    return render_template(
+        'patients.html', 
+        patients=patient_list_from_api, 
+        username=get_current_user_name(), 
+        active_page='patients',
+        firebase_config_json=json.dumps(FIREBASE_CLIENT_CONFIG),
+        firebase_custom_token=session.get('firebase_custom_token'),
+        app_id=app.name
+    )
 
 @app.route('/patient/<int:patient_id>')
 def patient_detail(patient_id):
-    # --- DEBUGGING: Cetak status sesi saat mengakses /patient/<id> ---
-    print(f"DEBUG (/patient/<id> accessed): is_logged_in() = {is_logged_in()}, session.get('logged_in') = {session.get('logged_in')}, session.get('user_info') = {session.get('user_info') is not None}")
-    print(f"DEBUG (/patient/<id> accessed): Full session content: {dict(session)}")
-    # --- AKHIR DEBUGGING ---
-
+    """
+    Rute untuk halaman detail pasien.
+    Menampilkan data monitoring, riwayat program, dan pola makan.
+    """
     if not is_logged_in() or get_current_user_role() != 'terapis':
         return redirect(url_for('login'))
 
@@ -271,19 +417,20 @@ def patient_detail(patient_id):
     if monitoring_status == 200 and isinstance(monitoring_data_api, dict):
         patient_info_for_header = monitoring_data_api.get('pasien_info', {})
         
-        # Ensure 'id' key exists in patient_info_for_header, using 'user_id' from API if available
-        # Otherwise, fall back to the patient_id from the URL
         patient_info_for_header['id'] = patient_info_for_header.get('user_id', patient_id)
 
         if 'nama' not in patient_info_for_header and 'nama_lengkap' in patient_info_for_header:
             patient_info_for_header['nama'] = patient_info_for_header['nama_lengkap']
         foto_profil_val = patient_info_for_header.get('url_foto_profil', patient_info_for_header.get('foto_filename'))
         if foto_profil_val and (foto_profil_val.startswith('http://') or foto_profil_val.startswith('https://')):
-             patient_info_for_header['foto_src_display'] = foto_profil_val
+            patient_info_for_header['foto_src_display'] = foto_profil_val
         else:
-             patient_info_for_header['foto_src_display'] = url_for('static', filename='img/default_avatar.png')
+            patient_info_for_header['foto_src_display'] = url_for('static', filename='img/default_avatar.png')
 
-        # Add flash messages for missing sections from monitoring_data_api
+        # HAPUS MOCK DATA: 'total_points' seharusnya datang dari backend di 'pasien_info'
+        # if 'total_points' not in monitoring_data_api['summary_kpi']:
+        #     monitoring_data_api['summary_kpi']['total_points'] = 1200 
+            
         if not monitoring_data_api.get('summary_kpi'):
             flash("Informasi KPI pasien tidak tersedia dari API ringkasan.", "info")
         if not monitoring_data_api.get('trends_chart'):
@@ -300,34 +447,38 @@ def patient_detail(patient_id):
         flash(f"Gagal mengambil data monitoring untuk pasien ID {patient_id}. Pesan: {str(error_detail)}", 'danger')
         return redirect(url_for('patients'))
 
-    # REVERTED: Fetch patient_rehab_history from its dedicated API endpoint
     rehab_history_resp, rehab_history_status, _ = api_request('GET', f'/api/program/terapis/assigned-to-patient/{patient_id}', params={'per_page': 100})
     
     patient_rehab_history_for_tab = []
     if rehab_history_status == 200 and isinstance(rehab_history_resp, dict) and 'programs' in rehab_history_resp:
         patient_rehab_history_for_tab = rehab_history_resp['programs']
     elif isinstance(rehab_history_resp, dict) and 'msg' in rehab_history_resp:
-          flash(f"Info: Gagal mengambil riwayat program rehabilitasi: {str(rehab_history_resp['msg'])}", "info")
+            flash(f"Info: Gagal mengambil riwayat program rehabilitasi: {str(rehab_history_resp['msg'])}", "info")
     else:
-          flash("Info: Riwayat program rehabilitasi tidak tersedia atau gagal diambil.", "info")
+            flash("Info: Riwayat program rehabilitasi tidak tersedia atau gagal diambil.", "info")
 
-    # Patient meal plans (currently stored in session)
-    # Since there's no API to fetch existing meal plans, we'll continue to rely on the session
-    # for displaying previously added meal plans within the current session.
     patient_meal_plans = session.get(f'meal_plans_patient_{patient_id}', [])
 
-    return render_template('patient_detail.html', 
-                           patient=patient_info_for_header, 
-                           monitoring_data_js=json.dumps(monitoring_data_api if isinstance(monitoring_data_api,dict) else {}),
-                           patient_rehab_history=patient_rehab_history_for_tab, 
-                           patient_meal_plans_json=json.dumps(patient_meal_plans), 
-                           username=get_current_user_name(),
-                           active_page='patients')
+    # Pass Firebase config and custom token to template
+    return render_template(
+        'patient_detail.html', 
+        patient=patient_info_for_header, 
+        monitoring_data_js=json.dumps(monitoring_data_api if isinstance(monitoring_data_api,dict) else {}),
+        patient_rehab_history=patient_rehab_history_for_tab, 
+        patient_meal_plans_json=json.dumps(patient_meal_plans), 
+        username=get_current_user_name(),
+        active_page='patients',
+        firebase_config_json=json.dumps(FIREBASE_CLIENT_CONFIG),
+        firebase_custom_token=session.get('firebase_custom_token'),
+        app_id=app.name
+    )
 
 
-# Rute baru untuk menyimpan data form sementara di sesi
 @app.route('/save_add_activity_form_temp', methods=['POST'])
 def save_add_activity_form_temp():
+    """
+    Menyimpan data form 'add activity' sementara di sesi.
+    """
     if not is_logged_in():
         return jsonify({"error": "Unauthorized"}), 401
     
@@ -341,6 +492,9 @@ def save_add_activity_form_temp():
 
 @app.route('/patient/<int:patient_id>/add_activity', methods=['GET', 'POST'])
 def add_activity(patient_id):
+    """
+    Rute untuk menambah program rehabilitasi baru untuk pasien.
+    """
     if not is_logged_in():
         return redirect(url_for('login'))
     
@@ -348,21 +502,16 @@ def add_activity(patient_id):
     patient_info_for_form = {}
     if pi_status == 200 and isinstance(patient_info_resp, dict) and 'pasien_info' in patient_info_resp:
         patient_info_for_form = patient_info_resp['pasien_info']
-        # Ensure 'id' key exists for form, using 'user_id' from API if available
         patient_info_for_form['id'] = patient_info_for_form.get('user_id', patient_id)
     else:
         flash(f"Gagal mengambil info pasien (ID: {patient_id}).", "danger")
         return redirect(url_for('patient_detail', patient_id=patient_id))
 
-    # Ambil data form yang disimpan dari sesi untuk request GET
-    # Gunakan .pop() untuk menghapus data dari sesi setelah diambil
     saved_form_data = session.pop('add_activity_form_data', {}) 
     if 'execution_date' in saved_form_data and saved_form_data['execution_date']:
         try:
-            # Reformat the date to YYYY-MM-DD for the input type="date"
             saved_form_data['execution_date'] = datetime.strptime(saved_form_data['execution_date'], '%Y-%m-%d').strftime('%Y-%m-%d')
         except ValueError:
-            # If the format is already different or invalid, keep it as is or handle error
             pass
 
 
@@ -373,7 +522,6 @@ def add_activity(patient_id):
 
             if not selected_movements:
                 flash("Harap pilih minimal satu gerakan untuk program ini.", "warning")
-                # Simpan kembali data form ke sesi jika validasi gagal
                 session['add_activity_form_data'] = { 
                     'program_name': request.form.get('program_name', ''),
                     'execution_date': request.form.get('execution_date', ''),
@@ -381,7 +529,6 @@ def add_activity(patient_id):
                 }
                 return redirect(url_for('add_activity', patient_id=patient_id))
 
-            # --- PERBAIKAN 1: Mengubah struktur data agar sesuai dengan API Backend ---
             list_gerakan_direncanakan = []
             for i, item in enumerate(selected_movements):
                 list_gerakan_direncanakan.append({
@@ -404,12 +551,11 @@ def add_activity(patient_id):
                 flash('Program rehabilitasi berhasil dibuat!', 'success')
                 session.pop('selected_movements_for_activity', None)
                 session.pop('patient_id_for_activity', None)
-                session.pop('add_activity_form_data', None) # Hapus data form setelah sukses submit
+                session.pop('add_activity_form_data', None)
                 return redirect(url_for('patient_detail', patient_id=patient_id))
             else:
-                error_msg = response_data.get('msg', response_data.get('error', 'Error tidak diketahui dari server.'))
+                error_msg = response_data.get('msg', response_data.get('error', 'Terjadi kesalahan saat membuat program.'))
                 flash(f"Gagal membuat program: {error_msg}", 'danger')
-                # Jika POST gagal, simpan kembali data form di sesi untuk ditampilkan ulang
                 session['add_activity_form_data'] = {
                     'program_name': request.form.get('program_name', ''),
                     'execution_date': request.form.get('execution_date', ''),
@@ -418,7 +564,6 @@ def add_activity(patient_id):
         
         except (json.JSONDecodeError, ValueError, TypeError) as e:
             flash(f"Terjadi kesalahan dalam memproses data gerakan: {str(e)}", "danger")
-            # Simpan kembali data form di sesi jika terjadi error
             session['add_activity_form_data'] = { 
                 'program_name': request.form.get('program_name', ''),
                 'execution_date': request.form.get('execution_date', ''),
@@ -427,27 +572,33 @@ def add_activity(patient_id):
 
     selected_movements_from_session = []
     if session.get('patient_id_for_activity') == patient_id:
-        selected_movements_from_session = session.get('selected_movements_for_activity', [])
+        selected_in_session = session.get('selected_movements_for_activity', [])
 
+    # Pass Firebase config and custom token to template
     return render_template(
         'add_activity.html', 
         patient=patient_info_for_form,
         username=get_current_user_name(),
-        selected_movements_from_session_json=json.dumps(selected_movements_from_session),
-        form_data=saved_form_data, # Teruskan data form yang diambil dari sesi ke template
-        now=datetime.utcnow()
+        selected_movements_from_session_json=json.dumps(selected_in_session),
+        form_data=saved_form_data,
+        now=datetime.utcnow(),
+        firebase_config_json=json.dumps(FIREBASE_CLIENT_CONFIG),
+        firebase_custom_token=session.get('firebase_custom_token'),
+        app_id=app.name
     )
 
 @app.route('/patient/<int:patient_id>/select_movements')
 def select_movements_view(patient_id):
-    if not is_logged_in():
+    """
+    Rute untuk memilih gerakan rehabilitasi dari perpustakaan.
+    """
+    if not is_logged_in() or get_current_user_role() != 'terapis':
         return redirect(url_for('login'))
         
     patient_info_resp, _, _ = api_request('GET', f'/api/monitoring/summary/pasien/{patient_id}')
     gerakan_resp, _, _ = api_request('GET', '/api/gerakan', params={'per_page': 1000}) 
     
     patient_info = patient_info_resp.get('pasien_info', {}) if isinstance(patient_info_resp, dict) else {}
-    # Ensure 'id' key exists for patient_info, using 'user_id' from API if available
     patient_info['id'] = patient_info.get('user_id', patient_id)
 
     all_movements = gerakan_resp.get('gerakan', []) if isinstance(gerakan_resp, dict) else []
@@ -456,17 +607,24 @@ def select_movements_view(patient_id):
     if session.get('patient_id_for_activity') == patient_id:
         selected_in_session = session.get('selected_movements_for_activity', [])
 
+    # Pass Firebase config and custom token to template
     return render_template(
         'select_movements.html',
         patient=patient_info,
         movements=all_movements,
         selected_movements_json_str=json.dumps(selected_in_session),
-        username=get_current_user_name()
+        username=get_current_user_name(),
+        firebase_config_json=json.dumps(FIREBASE_CLIENT_CONFIG),
+        firebase_custom_token=session.get('firebase_custom_token'),
+        app_id=app.name
     )
 
 
 @app.route('/patient/<int:patient_id>/update_selected_movements', methods=['POST'])
 def update_selected_movements_view(patient_id): 
+    """
+    API endpoint untuk mengupdate gerakan yang dipilih di sesi.
+    """
     if not is_logged_in():
         return jsonify({"error": "Unauthorized"}), 401 
     
@@ -478,9 +636,11 @@ def update_selected_movements_view(patient_id):
     session['patient_id_for_activity'] = patient_id 
     return jsonify({"msg": "Pilihan gerakan berhasil disimpan di sesi."}), 200
 
-# MODIFIED: Route for saving meal plan, now integrates with /api/terapis/diet-plan
 @app.route('/api/terapis/diet-plan', methods=['POST'])
 def create_diet_plan():
+    """
+    API endpoint untuk membuat rencana pola makan baru oleh terapis.
+    """
     if not is_logged_in() or get_current_user_role() != 'terapis':
         return jsonify({"error": "Unauthorized"}), 401
     
@@ -488,7 +648,6 @@ def create_diet_plan():
     if not request_data:
         return jsonify({"error": "No data provided"}), 400
 
-    # Extract data according to the API spec
     pasien_id = request_data.get('pasien_id')
     tanggal_makan = request_data.get('tanggal_makan')
     menu_pagi = request_data.get('menu_pagi', '')
@@ -496,7 +655,6 @@ def create_diet_plan():
     menu_malam = request_data.get('menu_malam', '')
     cemilan = request_data.get('cemilan', '')
 
-    # Basic validation (add more as needed)
     if not pasien_id or not tanggal_makan:
         return jsonify({"error": "Data tidak lengkap: pasien_id dan tanggal_makan wajib diisi."}), 400
 
@@ -509,20 +667,12 @@ def create_diet_plan():
         "cemilan": cemilan
     }
 
-    # Call the backend API
     api_response, status_code, _ = api_request('POST', '/api/terapis/diet-plan', data=api_payload)
 
     if status_code == 201:
         flash('Pola makan berhasil dibuat!', 'success')
-        # Optionally, you might want to refresh the local session's meal plans
-        # by fetching from a (hypothetical) API that retrieves all meal plans for a patient.
-        # Since that API isn't provided, we'll mimic by updating the session here
-        # to include the newly created plan (for display purposes).
-        # In a real app, you'd fetch the updated list from the backend.
-        
-        # Add the new meal plan to the session data for immediate display
         patient_meal_plans = session.get(f'meal_plans_patient_{pasien_id}', [])
-        patient_meal_plans.append(api_response.get('pola_makan', api_payload)) # Use returned data if available, else request payload
+        patient_meal_plans.append(api_response.get('pola_makan', api_payload))
         session[f'meal_plans_patient_{pasien_id}'] = patient_meal_plans
 
         return jsonify(api_response), 201
@@ -534,6 +684,9 @@ def create_diet_plan():
 
 @app.route('/program-report/<int:patient_id>/<int:program_id>')
 def program_report_detail(patient_id, program_id):
+    """
+    Rute untuk melihat detail laporan program rehabilitasi.
+    """
     if not is_logged_in() or get_current_user_role() != 'terapis':
         return redirect(url_for('login'))
     
@@ -541,76 +694,82 @@ def program_report_detail(patient_id, program_id):
     program_info_for_header = None
     patient_data_for_template = {} 
 
-    # Attempt to fetch program details first, as it might contain 'laporan_terkait'
     program_resp, prog_status, _ = api_request('GET', f'/api/program/{program_id}')
 
     if prog_status == 200 and isinstance(program_resp, dict) and 'program' in program_resp:
         program_data_from_api = program_resp['program']
         
-        # Populate program_info_for_header from the program data
         program_info_for_header = {
             "id": program_data_from_api.get("id"),
             "nama_program": program_data_from_api.get("nama_program"),
             "tanggal_program": program_data_from_api.get("tanggal_program"),
             "nama_terapis_program": program_data_from_api.get("terapis", {}).get("nama_lengkap", "N/A"),
-            "list_gerakan_direncanakan": program_data_from_api.get("list_gerakan_direncanakan", []) # Include planned movements
+            "list_gerakan_direncanakan": program_data_from_api.get("list_gerakan_direncanakan", [])
         }
         patient_data_for_template = program_data_from_api.get('pasien', {})
-        # Ensure 'id' for patient_data_for_template, using 'id' from program_data_from_api['pasien'] or fallback
         patient_data_for_template['id'] = patient_data_for_template.get('id', patient_id)
 
 
-        # Check if 'laporan_terkait' in program data exists
         if 'laporan_terkait' in program_data_from_api and isinstance(program_data_from_api['laporan_terkait'], dict):
             report_data_for_template = program_data_from_api['laporan_terkait']
-            # If report is found here, it's considered successfully loaded. No flash message needed.
         else:
-            # No 'laporan_terkait' found in program details, means report not submitted yet.
             program_name_for_flash = program_info_for_header.get('nama_program', 'N/A')
             flash(f"Laporan untuk program '{str(program_name_for_flash)}' belum disubmit oleh pasien.", "info")
 
     else:
-        # Failed to get program details at all
         error_detail = program_resp.get('error', program_resp.get('msg', 'Error tidak diketahui dari server (Program API).')) if isinstance(program_resp, dict) else "Respons API program tidak valid."
         flash(f"Gagal mengambil detail program. Pesan: {str(error_detail)}", "danger")
         return redirect(url_for('patient_detail', patient_id=patient_id))
 
-    # Ensure patient_data_for_template is consistent with patient_id if it wasn't properly set by program/report data
-    # This block can be simplified as the patient_data_for_template is already populated from program_resp['program']['pasien']
-    # And its 'id' is already ensured above.
     if 'nama_lengkap' not in patient_data_for_template and 'nama' in patient_data_for_template:
         patient_data_for_template['nama_lengkap'] = patient_data_for_template['nama']
 
+    # Pass Firebase config and custom token to template
     return render_template('program_report_detail.html', 
-                           report_data_json=json.dumps(report_data_for_template if report_data_for_template else {}), 
-                           program_info_header_json=json.dumps(program_info_for_header if program_info_for_header else {}), 
-                           patient_info_json=json.dumps(patient_data_for_template if patient_data_for_template else {}),
-                           patient=patient_data_for_template, 
-                           username=get_current_user_name(),
-                           active_page='patients')
+                            report_data_json=json.dumps(report_data_for_template if report_data_for_template else {}), 
+                            program_info_header_json=json.dumps(program_info_for_header if program_info_for_header else {}), 
+                            patient_info_json=json.dumps(patient_data_for_template if patient_data_for_template else {}),
+                            patient=patient_data_for_template, 
+                            username=get_current_user_name(),
+                            active_page='patients',
+                            firebase_config_json=json.dumps(FIREBASE_CLIENT_CONFIG),
+                            firebase_custom_token=session.get('firebase_custom_token'),
+                            app_id=app.name
+    )
 
 
 @app.route('/logout') 
 def logout(): 
-    # Clear all data from the user session
+    """
+    Rute untuk logout pengguna.
+    """
     session.clear() 
-    # Display a success message to the user
     flash('Anda telah berhasil logout.', 'success')
-    # Redirect the user back to the login page
     return redirect(url_for('login'))
 
-# NEW ROUTE: Display form for creating a new movement
 @app.route('/create_movement', methods=['GET'])
 def create_movement():
+    """
+    Rute untuk halaman membuat gerakan baru.
+    """
     if not is_logged_in() or get_current_user_role() != 'terapis':
         flash("Sesi tidak valid atau Anda bukan terapis. Silakan login kembali.", "warning")
         return redirect(url_for('login'))
-    return render_template('create_movement.html', username=get_current_user_name())
+    # Pass Firebase config and custom token to template
+    return render_template(
+        'create_movement.html', 
+        username=get_current_user_name(),
+        firebase_config_json=json.dumps(FIREBASE_CLIENT_CONFIG),
+        firebase_custom_token=session.get('firebase_custom_token'),
+        app_id=app.name
+    )
 
 
-# MODIFIED ROUTE: Handle POST for creating a new movement, then redirect
 @app.route('/api/create_movement', methods=['POST'])
 def create_new_movement():
+    """
+    API endpoint untuk membuat gerakan baru.
+    """
     if not is_logged_in() or get_current_user_role() != 'terapis':
         flash("Sesi tidak valid atau Anda bukan terapis.", "warning")
         return redirect(url_for('login'))
@@ -622,13 +781,11 @@ def create_new_movement():
         flash("Nama gerakan wajib diisi.", "danger")
         return redirect(url_for('create_movement'))
 
-    # Prepare data for text fields
     payload_data = {
         "nama_gerakan": nama_gerakan,
         "deskripsi": deskripsi
     }
 
-    # Prepare files for multipart/form-data
     files = {}
     if 'foto' in request.files:
         files['foto'] = (request.files['foto'].filename, request.files['foto'].read(), request.files['foto'].content_type)
@@ -637,16 +794,250 @@ def create_new_movement():
     if 'model_tflite' in request.files:
         files['model_tflite'] = (request.files['model_tflite'].filename, request.files['model_tflite'].read(), request.files['model_tflite'].content_type)
 
-    # Call the backend API
     api_response, status_code, _ = api_request('POST', '/api/gerakan/', data=payload_data, files=files)
 
     if status_code == 201:
         flash('Gerakan baru berhasil dibuat!', 'success')
-        return redirect(url_for('select_movements_view', patient_id=session.get('patient_id_for_activity', 0))) # Redirect back to select movements or patient detail
+        return redirect(url_for('select_movements_view', patient_id=session.get('patient_id_for_activity', 0)))
     else:
         error_msg = api_response.get('msg', api_response.get('error', 'Terjadi kesalahan saat membuat gerakan baru.'))
         flash(f"Gagal membuat gerakan baru: {error_msg}", 'danger')
-        return redirect(url_for('create_movement')) # Stay on the creation page to show error
+        return redirect(url_for('create_movement'))
+
+# --- NEW ROUTE: Scoreboard ---
+@app.route('/scoreboard')
+def scoreboard():
+    """
+    Rute untuk menampilkan halaman leaderboard (papan peringkat) pasien.
+    """
+    if not is_logged_in() or get_current_user_role() != 'terapis':
+        flash("Sesi tidak valid atau Anda bukan terapis. Silakan login kembali.", "warning")
+        return redirect(url_for('login'))
+
+    user_info = get_current_user_info()
+
+    # Pass Firebase config and custom token to template
+    return render_template(
+        'scoreboard.html',
+        username=user_info.get('nama_lengkap', user_info.get('username')),
+        active_page='scoreboard',
+        firebase_config_json=json.dumps(FIREBASE_CLIENT_CONFIG),
+        firebase_custom_token=session.get('firebase_custom_token'),
+        app_id=app.name
+    )
+
+# --- NEW API ENDPOINT: Leaderboard Data for Frontend ---
+@app.route('/api/gamification/leaderboard', methods=['GET'])
+def get_leaderboard_data_api(): # Ubah nama fungsi untuk menghindari konflik dengan rute FE /api/gamification/leaderboard di BE
+    """
+    API endpoint untuk frontend yang menyediakan data leaderboard pasien.
+    Mendapatkan total poin untuk setiap pasien dari backend nyata.
+    """
+    if not is_logged_in():
+        return jsonify({"error": "Unauthorized"}), 401
+
+    leaderboard_resp, status_code, _ = api_request('GET', '/api/gamification/leaderboard')
+
+    if status_code == 200 and isinstance(leaderboard_resp, dict) and 'leaderboard' in leaderboard_resp:
+        # Format data agar konsisten dengan ekspektasi frontend (misal: 'name' alih-alih 'nama_lengkap')
+        formatted_leaderboard = []
+        for entry in leaderboard_resp['leaderboard']:
+            # PERBAIKAN: Tangani kasus None untuk 'highest_badge_info' dengan lebih aman
+            highest_badge_info = entry.get('highest_badge_info')
+            photo_url = (highest_badge_info or {}).get('image_url') 
+            
+            if not photo_url:
+                # Jika tidak ada badge tertinggi atau image_url-nya kosong, gunakan default_avatar
+                photo_url = url_for('static', filename='img/default_avatar.png')
+
+            formatted_leaderboard.append({
+                "id": entry.get('user_id'),
+                "name": entry.get('nama_lengkap', entry.get('username')),
+                "total_points": entry.get('total_points'),
+                "photo_url": photo_url,
+                "highest_badge_info": highest_badge_info # Tetap sertakan objek lengkap jika ada
+            })
+        
+        # Backend sudah mengurutkan, tapi kita bisa pastikan lagi di FE
+        sorted_leaderboard = sorted(formatted_leaderboard, key=lambda x: x["total_points"], reverse=True)
+        
+        return jsonify({"leaderboard": sorted_leaderboard}), 200
+    else:
+        error_msg = leaderboard_resp.get('msg', leaderboard_resp.get('error', 'Gagal mengambil data leaderboard dari API backend.'))
+        return jsonify({"error": error_msg, "status_code": status_code}), status_code
+
+# --- NEW ROUTE: Badges Management Page (Terapis) ---
+@app.route('/badges', methods=['GET'])
+def badges_management():
+    """
+    Rute untuk halaman manajemen badge (tampilan daftar semua badge dan opsi CRUD).
+    """
+    if not is_logged_in() or get_current_user_role() != 'terapis':
+        flash("Sesi tidak valid atau Anda bukan terapis. Silakan login kembali.", "warning")
+        return redirect(url_for('login'))
+    
+    badges_resp, status_code, _ = api_request('GET', '/api/gamification/badges')
+    
+    all_badges = []
+    if status_code == 200 and isinstance(badges_resp, dict) and 'badges' in badges_resp:
+        for badge in badges_resp['badges']:
+            # Pastikan ada URL gambar, jika tidak gunakan default
+            if not badge.get('image_url'):
+                badge['image_url'] = url_for('static', filename='img/default_badge.png')
+            all_badges.append(badge)
+    else:
+        error_msg = badges_resp.get('msg', badges_resp.get('error', 'Gagal mengambil daftar badge.'))
+        flash(f"Error mengambil badge: {error_msg}", "danger")
+
+    return render_template(
+        'badges_management.html',
+        username=get_current_user_name(),
+        active_page='badges',
+        badges=all_badges,
+        firebase_config_json=json.dumps(FIREBASE_CLIENT_CONFIG),
+        firebase_custom_token=session.get('firebase_custom_token'),
+        app_id=app.name
+    )
+
+# --- NEW ROUTE: Create Badge Page (Terapis) ---
+@app.route('/badges/create', methods=['GET'])
+def create_badge_page():
+    """
+    Rute untuk halaman form membuat badge baru.
+    """
+    if not is_logged_in() or get_current_user_role() != 'terapis':
+        flash("Sesi tidak valid atau Anda bukan terapis. Silakan login kembali.", "warning")
+        return redirect(url_for('login'))
+    
+    return render_template(
+        'create_badge.html',
+        username=get_current_user_name(),
+        active_page='badges',
+        firebase_config_json=json.dumps(FIREBASE_CLIENT_CONFIG),
+        firebase_custom_token=session.get('firebase_custom_token'),
+        app_id=app.name
+    )
+
+# --- NEW API ENDPOINT: Create Badge (Terapis) ---
+@app.route('/api/badges', methods=['POST'])
+def api_create_badge():
+    """
+    API endpoint untuk membuat badge baru melalui backend.
+    """
+    if not is_logged_in() or get_current_user_role() != 'terapis':
+        return jsonify({"msg": "Unauthorized"}), 401
+
+    # Data dari form-data (karena ada file upload)
+    name = request.form.get('name')
+    description = request.form.get('description')
+    point_threshold = request.form.get('point_threshold')
+    image_file = request.files.get('image')
+
+    payload_data = {
+        "name": name,
+        "description": description,
+        "point_threshold": point_threshold
+    }
+    
+    files = {}
+    if image_file:
+        files['image'] = (image_file.filename, image_file.read(), image_file.content_type)
+
+    api_response, status_code, _ = api_request('POST', '/api/gamification/badges', data=payload_data, files=files)
+
+    if status_code == 201:
+        flash('Badge berhasil dibuat!', 'success')
+        return jsonify(api_response), 201
+    else:
+        error_msg = api_response.get('msg', api_response.get('error', 'Terjadi kesalahan saat membuat badge.'))
+        return jsonify({"msg": f"Gagal membuat badge: {error_msg}"}), status_code
+
+# --- NEW ROUTE: Edit Badge Page (Terapis) ---
+@app.route('/badges/<int:badge_id>/edit', methods=['GET'])
+def edit_badge_page(badge_id):
+    """
+    Rute untuk halaman form edit badge. Mengambil data badge yang sudah ada.
+    """
+    if not is_logged_in() or get_current_user_role() != 'terapis':
+        flash("Sesi tidak valid atau Anda bukan terapis. Silakan login kembali.", "warning")
+        return redirect(url_for('login'))
+    
+    badge_resp, status_code, _ = api_request('GET', f'/api/gamification/badges/{badge_id}')
+    
+    badge_data = {}
+    if status_code == 200 and isinstance(badge_resp, dict):
+        badge_data = badge_resp
+        if not badge_data.get('image_url'):
+            badge_data['image_url'] = url_for('static', filename='img/default_badge.png')
+    else:
+        error_msg = badge_resp.get('msg', badge_resp.get('error', 'Badge tidak ditemukan atau error mengambil data.'))
+        flash(f"Error: {error_msg}", "danger")
+        return redirect(url_for('badges_management'))
+
+    return render_template(
+        'edit_badge.html',
+        username=get_current_user_name(),
+        active_page='badges',
+        badge=badge_data,
+        firebase_config_json=json.dumps(FIREBASE_CLIENT_CONFIG),
+        firebase_custom_token=session.get('firebase_custom_token'),
+        app_id=app.name
+    )
+
+# --- NEW API ENDPOINT: Update Badge (Terapis) ---
+@app.route('/api/badges/<int:badge_id>', methods=['POST']) # Menggunakan POST karena multipart/form-data tidak mendukung PUT
+def api_update_badge(badge_id):
+    """
+    API endpoint untuk memperbarui badge melalui backend.
+    """
+    if not is_logged_in() or get_current_user_role() != 'terapis':
+        return jsonify({"msg": "Unauthorized"}), 401
+
+    # Data dari form-data
+    name = request.form.get('name')
+    description = request.form.get('description')
+    point_threshold = request.form.get('point_threshold')
+    image_file = request.files.get('image') # Bisa None jika tidak ada file baru
+
+    # Buat payload data. Kirim hanya field yang ada di form
+    payload_data = {}
+    if name is not None: payload_data['name'] = name
+    if description is not None: payload_data['description'] = description
+    if point_threshold is not None: payload_data['point_threshold'] = point_threshold
+
+    files = {}
+    if image_file:
+        files['image'] = (image_file.filename, image_file.read(), image_file.content_type)
+    # Jika ada checkbox "hapus gambar" atau ingin mengganti dengan null, bisa ditambahkan logika
+    # if request.form.get('remove_image') == 'true':
+    #     files['image'] = ('', b'', 'application/octet-stream') # Mengirim file kosong untuk menghapus
+
+    api_response, status_code, _ = api_request('PUT', f'/api/gamification/badges/{badge_id}', data=payload_data, files=files)
+
+    if status_code == 200:
+        flash('Badge berhasil diperbarui!', 'success')
+        return jsonify(api_response), 200
+    else:
+        error_msg = api_response.get('msg', api_response.get('error', 'Terjadi kesalahan saat memperbarui badge.'))
+        return jsonify({"msg": f"Gagal memperbarui badge: {error_msg}"}), status_code
+
+# --- NEW API ENDPOINT: Delete Badge (Terapis) ---
+@app.route('/api/badges/<int:badge_id>/delete', methods=['POST'])
+def api_delete_badge(badge_id):
+    """
+    API endpoint untuk menghapus badge melalui backend.
+    """
+    if not is_logged_in() or get_current_user_role() != 'terapis':
+        return jsonify({"msg": "Unauthorized"}), 401
+
+    api_response, status_code, _ = api_request('DELETE', f'/api/gamification/badges/{badge_id}')
+
+    if status_code == 200:
+        flash('Badge berhasil dihapus!', 'success')
+        return jsonify(api_response), 200
+    else:
+        error_msg = api_response.get('msg', api_response.get('error', 'Terjadi kesalahan saat menghapus badge.'))
+        return jsonify({"msg": f"Gagal menghapus badge: {error_msg}"}), status_code
 
 
 if __name__ == '__main__':

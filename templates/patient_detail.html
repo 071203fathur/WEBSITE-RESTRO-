@@ -14,7 +14,17 @@
     <script id="monitoringDataPayload" type="application/json">{{ monitoring_data_js | default('{}') | safe }}</script>
     <script id="patientRehabHistoryPayload" type="application/json">{{ patient_rehab_history | tojson | safe }}</script> 
     <script id="patientMealPlansPayload" type="application/json">{{ patient_meal_plans_json | default('[]') | safe }}</script> {# New payload for meal plans #}
-
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const profilePic = document.getElementById('patient-profile-pic');
+        if (profilePic) {
+            profilePic.onerror = function() {
+                this.onerror = null;
+                this.src = "{{ url_for('static', filename='img/default_avatar.jpg') }}";
+            };
+        }
+    });
+    </script>
 
     <style>
         body {
@@ -59,6 +69,29 @@
             font-size: 0.875rem;
             color: #718096;
         }
+
+        /* Styles for the points display in header */
+        .patient-points {
+            margin-left: 2rem; /* Add some space from patient info */
+            display: flex;
+            align-items: center;
+            background-color: #d1fae5; /* Light green background for points */
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        }
+        .patient-points .points-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #059669; /* Darker green */
+            margin-right: 0.5rem;
+        }
+        .patient-points .points-label {
+            font-size: 0.875rem;
+            color: #059669;
+            font-weight: 600;
+        }
+
 
         .kpi-grid {
             display: grid;
@@ -286,13 +319,21 @@
 {% block content %}
 <div class="container">
     <header class="header-section">
-        <img src="{{ patient.foto_src_display }}" alt="Foto Profil Pasien" class="profile-picture">
+        <img id="patient-profile-pic" 
+            src="{{ patient.foto_src_display if patient.foto_src_display else url_for('static', filename='img/default_avatar.jpg') }}" 
+            alt="Foto Profil Pasien {{ patient.nama_lengkap }}" 
+            class="profile-picture"> {# Inline onerror handler #}
         <div class="patient-info">
             <h1>{{ patient.nama_lengkap | default('Nama Pasien') }}</h1>
             <p>ID: {{ patient.id_pasien_string | default('N/A') }}</p>
             <p>Jenis Kelamin: {{ patient.jenis_kelamin | default('N/A') }}</p>
             <p>Tanggal Lahir: {{ patient.tanggal_lahir | format_date_id if patient.tanggal_lahir else 'N/A' }}</p>
             <p>Diagnosis: {{ patient.diagnosis | default('Belum ada diagnosis') }}</p>
+        </div>
+        {# New: Display Patient Points #}
+        <div class="patient-points">
+            <span id="patientTotalPoints" class="points-value">0</span>
+            <span class="points-label">Poin</span>
         </div>
         <div class="ml-auto">
             <a href="{{ url_for('add_activity', patient_id=patient.id) }}" class="button-add">
@@ -466,6 +507,7 @@
         const monitoringDataElement = document.getElementById('monitoringDataPayload');
         const patientRehabHistoryElement = document.getElementById('patientRehabHistoryPayload');
         const patientMealPlansElement = document.getElementById('patientMealPlansPayload'); // Get meal plans element
+        const patientTotalPointsElement = document.getElementById('patientTotalPoints'); // New: Get points element
 
         let monitoringData = null;
         let patientRehabHistory = [];
@@ -487,6 +529,7 @@
             document.getElementById('programHistoryTableBody').innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">Gagal memuat data.</td></tr>'; // Updated colspan
             document.getElementById('observationNotesContainer').innerHTML = '<p class="text-center py-4 text-red-500">Gagal memuat catatan.</p>';
             document.getElementById('mealPlanHistoryContainer').innerHTML = '<p class="text-center py-4 text-red-500">Gagal memuat pola makan.</p>'; // New error message
+            patientTotalPointsElement.textContent = 'Error'; // Set error for points
             return;
         }
 
@@ -497,12 +540,16 @@
             document.getElementById('rataRataAkurasi').textContent = kpi.rata_rata_akurasi_persen !== undefined ? `${kpi.rata_rata_akurasi_persen}%` : 'N/A';
             document.getElementById('rataRataDurasi').textContent = kpi.rata_rata_durasi_string || 'N/A';
             document.getElementById('frekuensiLatihan').textContent = kpi.frekuensi_latihan_per_minggu !== undefined ? kpi.frekuensi_latihan_per_minggu : 'N/A';
+            
+            // Populate Patient Points
+            patientTotalPointsElement.textContent = kpi.total_points !== undefined ? kpi.total_points : '0';
         } else {
             console.warn("KPI data not available or invalid.");
             document.getElementById('totalSesiSelesai').textContent = 'N/A';
             document.getElementById('rataRataAkurasi').textContent = 'N/A';
             document.getElementById('rataRataDurasi').textContent = 'N/A';
             document.getElementById('frekuensiLatihan').textContent = 'N/A';
+            patientTotalPointsElement.textContent = 'N/A'; // Also set points to N/A
         }
 
         // --- Populate Trends Charts ---
@@ -687,7 +734,8 @@
             const snacksMenu = document.getElementById('snacksMenu').value;
 
             if (!mealDate) {
-                alert('Tanggal pola makan harus diisi.');
+                // Using custom message box instead of alert()
+                showCustomMessageBox('Input Gagal', 'Tanggal pola makan harus diisi.', 'warning');
                 return;
             }
 
@@ -700,12 +748,8 @@
                 cemilan: snacksMenu
             };
 
-            // ==========================================================
-            // === PERBAIKAN UTAMA ADA DI BLOK FETCH DI BAWAH INI ===
-            // ==========================================================
-
             // Send data to the CORRECT Flask route for saving meal plan
-            fetch(`/api/terapis/diet-plan`, { // <-- URL SUDAH DIPERBAIKI
+            fetch(`/api/terapis/diet-plan`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -713,32 +757,29 @@
                 body: JSON.stringify(newMealPlanData)
             })
             .then(response => {
-                // Cek jika response tidak OK (misal: error 400, 500)
                 if (!response.ok) {
-                    // Coba ekstrak pesan error dari body JSON
                     return response.json().then(err => { throw err; });
                 }
                 return response.json();
             })
             .then(data => {
-                // Respons sukses dari server
-                alert(data.msg || "Pola makan berhasil disimpan!");
+                // Using custom message box instead of alert()
+                showCustomMessageBox('Sukses!', data.msg || "Pola makan berhasil disimpan!", 'success');
                 
-                // Update tampilan di frontend
                 const existingIndex = patientMealPlans.findIndex(plan => plan.tanggal_makan === newMealPlanData.tanggal_makan);
                 if (existingIndex !== -1) {
-                    patientMealPlans[existingIndex] = data.pola_makan || newMealPlanData; // Update
+                    patientMealPlans[existingIndex] = data.pola_makan || newMealPlanData;
                 } else {
-                    patientMealPlans.push(data.pola_makan || newMealPlanData); // Add new
+                    patientMealPlans.push(data.pola_makan || newMealPlanData);
                 }
-                renderMealPlans(); // Re-render daftar pola makan
-                mealPlanForm.reset(); // Kosongkan form
+                renderMealPlans();
+                mealPlanForm.reset();
             })
             .catch(error => {
                 console.error('Error saving meal plan:', error);
-                // Tampilkan pesan error yang lebih spesifik jika ada
                 const errorMessage = error.msg || error.error || 'Terjadi kesalahan saat menghubungi server untuk menyimpan pola makan.';
-                alert('Error: ' + errorMessage);
+                // Using custom message box instead of alert()
+                showCustomMessageBox('Error', 'Error: ' + errorMessage, 'danger');
             });
         });
 
@@ -747,4 +788,3 @@
     });
 </script>
 {% endblock %}
-<!-- das -->

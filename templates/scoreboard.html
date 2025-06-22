@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+
+{% block title %}Peringkat Pasien - RESTRO{% endblock %}
+
+{# block head_extra here to contain scoreboard specific styles #}
+{% block head_extra %}
+    <style>
+        /* Existing scoreboard-specific styles */
+        .container-scoreboard {
+            max-width: 1000px;
+            margin: 2rem auto;
+            padding: 1.5rem;
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+        }
+        .page-header {
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            text-align: center;
+        }
+        .page-header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #28a745; /* Primary green */
+            margin-bottom: 0.5rem;
+        }
+        .page-header p {
+            font-size: 1.1rem;
+            color: #555;
+        }
+        .leaderboard-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1.5rem;
+        }
+        .leaderboard-table th,
+        .leaderboard-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .leaderboard-table th {
+            background-color: #f8fafc;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #4a5568;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .leaderboard-table tbody tr:nth-child(even) {
+            background-color: #fcfdfe;
+        }
+        .leaderboard-table tbody tr:hover {
+            background-color: #e6f7ea; /* Light green hover */
+        }
+        .rank-cell {
+            width: 70px;
+            font-weight: 700;
+            text-align: center;
+            color: #28a745;
+        }
+        .rank-cell.top-rank {
+            font-size: 1.25rem;
+            color: #d97706; /* Gold for top ranks */
+        }
+        .patient-name-cell {
+            display: flex;
+            align-items: center;
+        }
+        .patient-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 0.75rem;
+            border: 2px solid #a7f3d0;
+        }
+        .points-cell {
+            font-weight: 600;
+            color: #3b82f6;
+            text-align: right;
+        }
+        .badge-info-cell { /* New style for badge cell */
+            display: flex;
+            align-items: center;
+            gap: 0.5rem; /* Space between badge image and name */
+        }
+        .badge-image { /* New style for badge image */
+            width: 30px;
+            height: 30px;
+            object-fit: contain;
+        }
+        .no-data-message {
+            text-align: center;
+            padding: 2rem;
+            color: #718096;
+            font-style: italic;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .container-scoreboard {
+                margin: 1rem auto;
+                padding: 1rem;
+            }
+            .page-header h1 {
+                font-size: 2rem;
+            }
+            .page-header p {
+                font-size: 1rem;
+            }
+            .leaderboard-table th,
+            .leaderboard-table td {
+                padding: 0.7rem;
+                font-size: 0.85rem;
+            }
+            .patient-avatar {
+                width: 30px;
+                height: 30px;
+                margin-right: 0.5rem;
+            }
+            .badge-image {
+                width: 25px;
+                height: 25px;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <main class="main-content container-scoreboard">
+        <div class="page-header">
+            <h1>Peringkat Pasien</h1>
+            <p>Lihat pasien mana yang paling aktif dan mendapatkan poin tertinggi!</p>
+        </div>
+
+        <div id="scoreboardContent">
+            <p class="no-data-message" id="loadingMessage">Memuat peringkat...</p>
+            <table class="leaderboard-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>Peringkat</th>
+                        <th>Nama Pasien</th>
+                        <th style="text-align: right;">Total Poin</th>
+                        <th>Badge Tertinggi</th> {# NEW: Column for Highest Badge #}
+                    </tr>
+                </thead>
+                <tbody id="leaderboardTableBody">
+                    <!-- Leaderboard rows will be injected here by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </main>
+{% endblock %}
+
+{% block scripts_extra %}
+    <script type="module">
+        // showCustomMessageBox is now defined globally in base.html via window.showCustomMessageBox
+        // so it can be called directly here.
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const leaderboardTableBody = document.getElementById('leaderboardTableBody');
+            const loadingMessage = document.getElementById('loadingMessage');
+            const leaderboardTable = document.querySelector('.leaderboard-table');
+
+            // Function to fetch leaderboard data
+            async function fetchLeaderboardData() {
+                try {
+                    // Call the Flask frontend endpoint which proxies to the Azure backend
+                    const response = await fetch('/api/gamification/leaderboard'); 
+                    
+                    if (!response.ok) {
+                        let errorDetail = '';
+                        // Read response body as text first to avoid "body stream already read"
+                        const responseText = await response.text(); 
+                        try {
+                            // Try to parse as JSON from the text
+                            const errorData = JSON.parse(responseText); 
+                            errorDetail = errorData.error || errorData.msg || `Unknown API error for status ${response.status}.`;
+                        } catch (jsonParseError) {
+                            // If it's not JSON, use the raw text
+                            errorDetail = `Non-JSON response from server (Status: ${response.status}). Raw: ${responseText.substring(0, 200)}...`;
+                        }
+                        
+                        throw new Error(errorDetail); // Throw with a comprehensive error message
+                    }
+                    // If response is OK, it should be JSON
+                    return await response.json(); 
+                } catch (error) {
+                    console.error('Error fetching leaderboard data:', error);
+                    // Use the global showCustomMessageBox function from base.html
+                    if (typeof window.showCustomMessageBox === 'function') {
+                        window.showCustomMessageBox("Error Memuat Peringkat", `Gagal memuat data peringkat: ${error.message || error}`, 'danger');
+                    } else {
+                        console.error("window.showCustomMessageBox is not defined. Cannot display user-friendly error.");
+                    }
+                    
+                    // Return an object that indicates an error to the rendering logic
+                    return { error: error.message || 'Error fetching data.' };
+                }
+            }
+
+            // Render leaderboard
+            const data = await fetchLeaderboardData();
+            loadingMessage.style.display = 'none'; // Hide loading message
+
+            if (data.error) {
+                // Display a more specific error in the table body if data.error exists
+                leaderboardTableBody.innerHTML = `<tr><td colspan="4" class="no-data-message text-red-500">${data.error}</td></tr>`;
+                leaderboardTable.style.display = 'table'; 
+            } else if (data.leaderboard && data.leaderboard.length > 0) {
+                leaderboardTable.style.display = 'table';
+                leaderboardTableBody.innerHTML = ''; 
+
+                data.leaderboard.forEach((patient, index) => {
+                    const rank = index + 1;
+                    const rankClass = rank <= 3 ? 'top-rank' : '';
+                    // Use actual photo_url from backend, with fallback to default_avatar.png
+                    const photoUrl = patient.photo_url || "{{ url_for('static', filename='img/default_avatar.png') }}"; 
+                    
+                    // NEW: Render Highest Badge Info
+                    const highestBadge = patient.highest_badge_info;
+                    let badgeHtml = '';
+                    if (highestBadge && highestBadge.image_url) {
+                        badgeHtml = `
+                            <div class="badge-info-cell">
+                                <img src="${highestBadge.image_url}" alt="${highestBadge.name}" class="badge-image" onerror="this.onerror=null;this.src='{{ url_for('static', filename='img/default_badge.png') }}';">
+                                <span>${highestBadge.name}</span>
+                            </div>
+                        `;
+                    } else {
+                        // Fallback if no highest badge or image_url is missing
+                        badgeHtml = '<span>Tidak ada</span>'; 
+                    }
+
+                    const row = `
+                        <tr>
+                            <td class="rank-cell ${rankClass}">${rank}</td>
+                            <td class="patient-name-cell">
+                                <img src="${photoUrl}" alt="${patient.name}" class="patient-avatar" onerror="this.onerror=null;this.src='{{ url_for('static', filename='img/default_avatar.png') }}';">
+                                <span>${patient.name}</span>
+                            </td>
+                            <td class="points-cell">${patient.total_points} Poin</td>
+                            <td>${badgeHtml}</td> {# NEW: Display badge info #}
+                        </tr>
+                    `;
+                    leaderboardTableBody.innerHTML += row;
+                });
+            } else {
+                leaderboardTableBody.innerHTML = `<tr><td colspan="4" class="no-data-message">Belum ada data peringkat pasien.</td></tr>`;
+                leaderboardTable.style.display = 'table'; 
+            }
+        });
+    </script>
+{% endblock %}
