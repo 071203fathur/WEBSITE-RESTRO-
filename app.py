@@ -627,7 +627,8 @@ def add_activity(patient_id):
                 'catatan_terapis': request.form.get('catatan_terapis', '')
             }
 
-    selected_movements_from_session = []
+    # Initialize selected_in_session with a default value
+    selected_in_session = [] 
     if session.get('patient_id_for_activity') == patient_id:
         selected_in_session = session.get('selected_movements_for_activity', [])
 
